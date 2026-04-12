@@ -1,0 +1,103 @@
+{
+    "activeFile": "MapProd1.tmx",
+    "expandedProjectPaths": [
+        "."
+    ],
+    "fileStates": {
+        "": {
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "MapProd1.tmx": {
+            "scale": 0.75,
+            "selectedLayer": 2,
+            "viewCenter": {
+                "x": 406.66666666666663,
+                "y": 459.33333333333326
+            }
+        },
+        "MapProd1.tmx#TX Plant": {
+            "scaleInDock": 0.75
+        },
+        "MapProd1.tmx#TX Plant with Shadow": {
+            "scaleInDock": 1
+        },
+        "MapProd1.tmx#TX Player": {
+            "scaleInDock": 1
+        },
+        "MapProd1.tmx#TX Props": {
+            "scaleInDock": 1
+        },
+        "MapProd1.tmx#TX Props with Shadow": {
+            "scaleInDock": 0.75
+        },
+        "MapProd1.tmx#TX Shadow": {
+            "scaleInDock": 1
+        },
+        "MapProd1.tmx#TX Shadow Plant": {
+            "scaleInDock": 1
+        },
+        "MapProd1.tmx#TX Struct": {
+            "scaleInDock": 1
+        },
+        "MapProd1.tmx#TX Tileset Grass": {
+            "scaleInDock": 1
+        },
+        "MapProd1.tmx#TX Tileset Stone Ground": {
+            "scaleInDock": 1
+        },
+        "MapProd1.tmx#TX Tileset Wall": {
+            "scaleInDock": 1
+        },
+        "Mapa1.tmx": {
+            "scale": 0.5,
+            "selectedLayer": 2,
+            "viewCenter": {
+                "x": 268,
+                "y": 179
+            }
+        },
+        "Mapa1.tmx#TX Plant": {
+            "scaleInDock": 1
+        },
+        "Mapa1.tmx#TX Struct": {
+            "scaleInDock": 1
+        },
+        "Mapa1.tmx#TX Tileset Wall": {
+            "scaleInDock": 1
+        },
+        "Mapa1.tmx#Tiled": {
+            "scaleInDock": 0.75
+        },
+        "Mapa1.tmx#Tiles": {
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "Mapa1.tmx#Tileset1": {
+            "scaleInEditor": 1
+        }
+    },
+    "last.imagePath": "C:/Users/Mathe/Downloads/Pixel Art Top Down - Basic v1.2.3/Texture/Extra",
+    "map.height": 30,
+    "map.lastUsedFormat": "tmx",
+    "map.tileHeight": 32,
+    "map.tileWidth": 32,
+    "openFiles": [
+        "Mapa1.tmx",
+        "MapProd1.tmx"
+    ],
+    "project": "Tiled Maps.tiled-project",
+    "recentFiles": [
+        "Mapa1.tmx",
+        "MapProd1.tmx"
+    ],
+    "tileset.embedInMap": true,
+    "tileset.margin": 0,
+    "tileset.spacing": 0,
+    "tileset.tileSize": {
+        "height": 32,
+        "width": 32
+    },
+    "tileset.transparentColor": "#898989",
+    "tileset.useTransparentColor": true
+}
