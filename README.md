@@ -2,7 +2,7 @@
 
 Un juego de acción-sigilo en perspectiva superior (2D top-down) inspirado en títulos como Hotline Miami. El juego se enfoca en movimiento táctico, detección de enemigos y entornos interactivos.
 
-## 📋 Índice
+## Índice
 
 - [Estructura del Proyecto](#estructura-del-proyecto)
 - [Módulos Principales](#módulos-principales)
@@ -12,7 +12,7 @@ Un juego de acción-sigilo en perspectiva superior (2D top-down) inspirado en t�
 - [Sistemas de IA](#sistemas-de-ia)
 - [Mapas y Assets](#mapas-y-assets)
 
-## 📁 Estructura del Proyecto
+## Estructura del Proyecto
 
 ```
 Atraco_Tactico/
