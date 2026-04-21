@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.12.1" orientation="orthogonal" renderorder="right-down" width="30" height="30" tilewidth="32" tileheight="32" infinite="0" nextlayerid="27" nextobjectid="155">
+<map version="1.10" tiledversion="1.12.1" orientation="orthogonal" renderorder="right-down" width="30" height="30" tilewidth="32" tileheight="32" infinite="0" nextlayerid="27" nextobjectid="277">
  <tileset firstgid="1" name="TX Struct" tilewidth="32" tileheight="32" tilecount="256" columns="16">
   <image source="../tilesets/Pixel Art Top Down - Basic v1.2.3/Texture/TX Struct.png" width="512" height="512"/>
  </tileset>
@@ -578,7 +578,7 @@
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 </data>
  </layer>
- <layer id="11" name="arbustos2" width="30" height="30">
+ <layer id="11" name="arbustos2" width="30" height="30" visible="0">
   <data encoding="csv">
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,2043,2044,2045,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,2059,2060,2061,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -612,201 +612,197 @@
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 </data>
  </layer>
- <objectgroup color="#aa00ff" id="26" name="hongos" visible="0">
-  <object id="142" x="375" y="794" width="33" height="24"/>
-  <object id="144" x="149" y="764" width="36" height="30"/>
-  <object id="145" x="116" y="623" width="31" height="31"/>
-  <object id="146" x="227" y="458" width="33" height="27"/>
-  <object id="147" x="124" y="250" width="33" height="26"/>
-  <object id="148" x="387" y="249" width="34" height="33"/>
-  <object id="149" x="581" y="344" width="32" height="24"/>
-  <object id="150" x="670" y="168" width="40" height="26"/>
-  <object id="151" x="760" y="412" width="35" height="28"/>
-  <object id="152" x="566" y="742" width="34" height="29"/>
-  <object id="153" x="651" y="471" width="25" height="28"/>
+ <objectgroup color="#aa00ff" id="26" name="hongos">
+  <object id="142" x="375" y="794" width="15" height="15"/>
+  <object id="144" x="166" y="783" width="15" height="15"/>
+  <object id="145" x="126.333" y="635.667" width="15" height="15"/>
+  <object id="146" x="245" y="470.5" width="15" height="14.5"/>
+  <object id="147" x="124" y="250" width="15" height="15"/>
+  <object id="148" x="387" y="249" width="15" height="15"/>
+  <object id="149" x="581" y="344" width="15" height="15"/>
+  <object id="150" x="670" y="168" width="15" height="15"/>
+  <object id="151" x="760" y="412" width="15" height="15"/>
+  <object id="152" x="566" y="742" width="15" height="15"/>
+  <object id="153" x="651" y="471" width="15" height="15"/>
  </objectgroup>
- <objectgroup color="#ff0000" id="18" name="collisions">
-  <object id="33" x="26.6667" y="836">
-   <polygon points="0,-2.66667 -2.66667,66.6667 682.667,64 682.667,-6.66667"/>
+ <objectgroup color="#ff0000" id="18" name="Coli">
+  <object id="155" x="262.667" y="648.667" width="16" height="48"/>
+  <object id="156" x="130.667" y="170.667" width="26.6667" height="48"/>
+  <object id="157" x="453.333" y="105.333" width="20" height="46.6667"/>
+  <object id="158" x="674.667" y="104" width="25.3333" height="49.3333"/>
+  <object id="159" x="866.667" y="488" width="25.3333" height="49.3333"/>
+  <object id="160" x="865.333" y="714.667" width="25.3333" height="48"/>
+  <object id="161" x="69.3333" y="781.333" width="22.6667" height="48"/>
+  <object id="162" x="387.333" y="676" width="24.6667" height="20.6667">
+   <capsule/>
   </object>
-  <object id="34" x="774" y="768.667">
-   <polygon points="0,0 -69.3333,1.33333 -69.3333,61.3333 -8,62 -5.33333,94 -2.33333,93.6667"/>
+  <object id="163" x="420.333" y="675" width="24.6667" height="20.6667">
+   <capsule/>
   </object>
-  <object id="35" x="792" y="768.667">
-   <polygon points="0,0 2.33333,96 8.33333,96.3333 8,64 134.667,63.3333 134.667,-1.33333"/>
+  <object id="164" x="515.667" y="675" width="24.6667" height="20.6667">
+   <capsule/>
   </object>
-  <object id="38" x="869.333" y="718.667" width="20.6667" height="42"/>
-  <object id="39" x="738.5" y="698.5" width="28" height="66.5"/>
-  <object id="40" x="802" y="697" width="29" height="67"/>
-  <object id="43" x="918.667" y="286.667" width="14.6667" height="486.667"/>
-  <object id="44" x="729.333" y="283.333" width="200.667" height="12.0003"/>
-  <object id="45" x="726.333" y="95.3332" width="168" height="10.667"/>
-  <object id="46" x="886.333" y="99.3332" width="10.667" height="197.334"/>
-  <object id="47" x="728.666" y="140.666" width="9.33367" height="152.667"/>
-  <object id="49" x="731.333" y="138.667">
-   <polygon points="0,0 80.6667,37.3333 78.6667,46 4.66667,49.3333"/>
+  <object id="165" x="549" y="675.667" width="24.6667" height="20.6667">
+   <capsule/>
   </object>
-  <object id="50" x="744.667" y="107.333">
-   <polygon points="0,0 66.6667,30.6667 72,31.3333 71.3333,24.6667 -8,-12.6667"/>
-  </object>
-  <object id="52" x="474" y="-4" width="264.667" height="13.3333"/>
-  <object id="53" x="728.333" y="-1.33332" width="10.667" height="104.667"/>
-  <object id="54" x="474" y="2.99983" width="14.0003" height="132"/>
-  <object id="55" x="476.667" y="0" width="40.6667" height="33.3333">
+  <object id="166" x="320" y="656.667" width="62" height="44.6667"/>
+  <object id="167" x="578.667" y="658" width="60" height="42"/>
+  <object id="168" x="449.333" y="656.667" width="62" height="43.3333"/>
+  <object id="169" x="287.333" y="608" width="414" height="62"/>
+  <object id="170" x="288" y="384.667" width="9.33333" height="134"/>
+  <object id="171" x="288" y="554" width="8.66667" height="58"/>
+  <object id="172" x="288" y="384" width="417.333" height="9.33333"/>
+  <object id="173" x="694.667" y="382.667" width="6.66667" height="136.667"/>
+  <object id="174" x="698" y="554.667" width="7.33333" height="56"/>
+  <object id="175" x="670" y="381.333" width="34.6667" height="34">
    <ellipse/>
   </object>
-  <object id="56" x="602.667" y="40.6667">
-   <polygon points="0,0 -14.6667,3.33333 -23.3333,11.3333 -22,30.6667 -22.6667,38 1.33333,46.6667 25.3333,43.3333 31.3333,36.6667 31.3333,11.3333 20.6667,1.33333"/>
-  </object>
-  <object id="59" x="94.6667" y="126" width="394" height="10"/>
-  <object id="60" x="450" y="114" width="23.3333" height="38"/>
-  <object id="61" x="134" y="180" width="19.3333" height="38.6667"/>
-  <object id="62" x="95.3333" y="124.667">
-   <polygon points="0,0 0.666667,130 -32,130 -30,284.667 -29.3333,292 32,290.667 32,320 -71.3333,321.333 -71.3333,331.333 41.3333,330 39.3333,226.667 -23.3333,225.333 -24.6667,137.333 8.66667,139.333 9.33333,0.666667"/>
-  </object>
-  <object id="63" x="97.3333" y="314.667">
-   <polygon points="0,0 1.33333,-28.6667 21.3333,-28.6667 28,-13.3333 28,0 32.6667,22 32.6667,25.3333 31.3333,33.3333 0,33.3333 -3.33333,22 -7.33333,5.33333"/>
-  </object>
-  <object id="64" x="286" y="412">
-   <polygon points="0,0 -1.33333,-40.6667 3.33333,-43.3333 4,-147.333 18,-136.667 29.3333,-138 43.3333,-131.333 56.6667,-132.667 62,-146 65.3333,-161.333 60.6667,-166.667 52.6667,-168.667 47.3333,-174 27.3333,-177.333 10,-168.667 8,-164 3.33333,-163.333 0.666667,-192 2,-200.667 16.6667,-194.667 36,-195.333 50.6667,-194.667 72.6667,-194.667 82.6667,-194.667 82,-207.333 -6,-244 -10.6667,-240.667 -10.6667,-213.333 -14.6667,-207.333 -32,-206.667 -29.3333,-161.333 -17.3333,-155.333 -8,-160 -12.6667,-151.333 -30.6667,-144.667 -29.3333,-107.333 -26.6667,-94.6667 -10,-94.6667 -10,-62.6667 -66,-67.3333 -62.6667,-86.6667 -64.6667,-101.333 -72.6667,-118 -92.6667,-110 -92.6667,-96.6667 -93.3333,-69.3333 -100,-64 -101.333,-56 -103.333,34.6667 -94.6667,34 -92,26.6667 -79.3333,38.6667 -59.3333,31.3333 -60,12.6667 -60,2"/>
-  </object>
-  <object id="65" x="286.667" y="136.667">
-   <polygon points="0,0 78,37.3333 82,22 15.3333,-4.66667"/>
-  </object>
-  <object id="66" x="21.3333" y="444" width="12.6667" height="396.667"/>
-  <object id="67" x="47.3333" y="625.333"/>
-  <object id="69" x="36" y="568.667" width="24" height="36.6667"/>
-  <object id="70" x="57.3333" y="476.667" width="42" height="36.6667">
+  <object id="176" x="514" y="804" width="28" height="28">
    <ellipse/>
   </object>
-  <object id="71" x="389.333" y="676" width="26" height="22">
+  <object id="177" x="706" y="735.333" width="31.3333" height="27.3333">
    <ellipse/>
   </object>
-  <object id="72" x="419.333" y="674" width="28" height="24.6667">
+  <object id="178" x="678.667" y="771.333" width="18.6667" height="22.6667">
    <ellipse/>
   </object>
-  <object id="74" x="517.667" y="676.333" width="26" height="22">
+  <object id="179" x="677.333" y="804.667" width="25.3333" height="24">
    <ellipse/>
   </object>
-  <object id="75" x="547.667" y="674.333" width="28" height="24.6667">
+  <object id="180" x="704" y="768.667" width="69.3333" height="94.6667"/>
+  <object id="181" x="792.667" y="768" width="134" height="88.6667"/>
+  <object id="182" x="917" y="284" width="14" height="492"/>
+  <object id="183" x="899" y="740" width="25" height="30">
    <ellipse/>
   </object>
-  <object id="76" x="325.333" y="690">
-   <polygon points="0,0 -1.33333,10 14,9.33333 52,9.33333 55.3333,-0.666667 54.6667,-15.3333 52.6667,-34 18,-34.6667 -4.66667,-28.6667"/>
-  </object>
-  <object id="77" x="452.667" y="689.333">
-   <polygon points="0,0 -1.33333,10 14,9.33333 52,9.33333 55.3333,-0.666667 54.6667,-15.3333 52.6667,-34 18,-34.6667 -4.66667,-28.6667"/>
-  </object>
-  <object id="80" x="584" y="691.333">
-   <polygon points="0,0 -1.33333,10 14,9.33333 52,9.33333 55.3333,-0.666667 54.6667,-15.3333 52.6667,-34 18,-34.6667 -4.66667,-28.6667"/>
-  </object>
-  <object id="81" x="479.333" y="284.333" width="32.6667" height="32.3333"/>
-  <object id="83" x="674.667" y="334.667" width="26" height="41.3333"/>
-  <object id="84" x="739.333" y="221.333" width="30.6667" height="58.6667"/>
-  <object id="85" x="736.364" y="294">
-   <polygon points="2.75,-6.5 62.9603,21.7643 82.0606,36.7273 75.1196,38.2273 0.66484,3.41162"/>
-  </object>
-  <object id="88" x="195.667" y="225.083" width="25.5" height="28.5">
+  <object id="184" x="732" y="281" width="189" height="13"/>
+  <object id="186" x="577.5" y="37.5" width="57.5" height="50">
    <ellipse/>
   </object>
-  <object id="89" x="239.333" y="270.667">
+  <object id="187" x="729.5" y="94" width="164.5" height="8"/>
+  <object id="188" x="884.5" y="91" width="11.5" height="198.5"/>
+  <object id="189" x="738.5" y="221.5" width="27" height="53.5"/>
+  <object id="190" x="768.5" y="223" width="31" height="32"/>
+  <object id="191" x="801.5" y="225.5" width="29.5" height="29"/>
+  <object id="192" x="729" y="139.5" width="9.5" height="153.5"/>
+  <object id="193" x="741" y="176.5" width="87" height="40"/>
+  <object id="194" x="728" y="-0.5" width="8.5" height="104"/>
+  <object id="195" x="730" y="140">
+   <polygon points="3,-2 92,41.5 5,43"/>
+  </object>
+  <object id="196" x="730" y="102.5">
+   <polygon points="0,0 84.5,38.5 84.5,32 3,-8.5"/>
+  </object>
+  <object id="197" x="480" y="0.666667" width="257.333" height="8.66667"/>
+  <object id="198" x="480" y="0" width="8" height="133.333"/>
+  <object id="199" x="98.6667" y="127.333" width="388" height="7.33333"/>
+  <object id="201" x="96" y="130" width="7.33333" height="132"/>
+  <object id="202" x="65.3333" y="256.667" width="38" height="5.33333"/>
+  <object id="203" x="65.3333" y="258" width="6" height="98.6667"/>
+  <object id="204" x="64.6667" y="354.667" width="70.6667" height="100"/>
+  <object id="205" x="185.333" y="352.667" width="38" height="94"/>
+  <object id="206" x="184.667" y="353.333" width="100.667" height="60.6667"/>
+  <object id="207" x="280" y="173.333" width="6" height="188"/>
+  <object id="208" x="260" y="196" width="21.3333" height="56.6667"/>
+  <object id="209" x="259.333" y="258.667" width="26" height="62.6667"/>
+  <object id="210" x="98.6667" y="286" width="30" height="62"/>
+  <object id="211" x="194.667" y="298.667" width="26.6667" height="48.6667"/>
+  <object id="212" x="196.667" y="228.667" width="24" height="22.6667"/>
+  <object id="213" x="227.333" y="256.667" width="23.3333" height="27.3333"/>
+  <object id="219" x="193.333" y="479.333" width="26.6667" height="32.6667"/>
+  <object id="221" x="38.6667" y="566" width="19.3333" height="36.6667"/>
+  <object id="222" x="24.6667" y="446.667" width="110" height="8"/>
+  <object id="223" x="23.3333" y="447.333" width="10" height="455.333"/>
+  <object id="224" x="27" y="829" width="685" height="73"/>
+  <object id="225" x="738" y="698" width="26" height="66"/>
+  <object id="226" x="807" y="699" width="21" height="66"/>
+  <object id="228" x="696" y="553">
+   <polygon points="0,0 86.5,40.5 86.5,47 9.5,50.5"/>
+  </object>
+  <object id="229" x="698" y="516">
+   <polygon points="0,0 84,40 85.5,32.5 4,-6.5"/>
+  </object>
+  <object id="230" x="483" y="290" width="27" height="25"/>
+  <object id="231" x="708" y="361" width="24.5" height="52"/>
+  <object id="232" x="736.5" y="448" width="29" height="33"/>
+  <object id="233" x="728" y="331">
+   <polygon points="1,-2 86.5,38 86.5,45 6,44 7.5,60 1,57"/>
+  </object>
+  <object id="234" x="737" y="288.5">
+   <polygon points="0,0 77,38.5 78,42.5 68.5,39 -3,6"/>
+  </object>
+  <object id="235" x="899" y="294" width="24" height="20.5">
    <ellipse/>
   </object>
-  <object id="90" x="70.6667" y="788" width="16.6667" height="38"/>
-  <object id="91" x="264.667" y="660" width="14.6667" height="39.3333"/>
-  <object id="92" x="741.333" y="446.667">
-   <polygon points="0,0 19.3333,0 21.3333,12.6667 14,15.3333 12,34.6667 4,22.6667 4,19.3333 -6,12 -10,5.33333"/>
+  <object id="236" x="902" y="334">
+   <polygon points="0,0 -24,1 -30,13 -34.5,26.5 -26.5,32 -20,31.5 -2,36.5 2.5,40.5 10,39 15.5,36 14.5,29 20.5,27 21.5,16 14.5,11 8.5,7.5 4,8.5"/>
   </object>
-  <object id="93" x="217.333" y="480.667">
-   <polygon points="0,0 -19.3333,0 -21.3333,12.6667 -14,15.3333 -12,34.6667 -4,22.6667 -4,19.3333 6,12 10,5.33333"/>
+  <object id="237" x="294" y="554">
+   <polygon points="0,0 -87.3333,40.6667 -87.3333,46 -2.66667,46"/>
   </object>
-  <object id="94" x="422" y="406.667">
-   <polygon points="0,0 18.6667,0.666667 20.6667,31.3333 -2.66667,32.6667"/>
+  <object id="238" x="207.333" y="549.333">
+   <polygon points="0,0 82.6667,-38.6667 82.6667,-32 2,6.66667"/>
   </object>
-  <object id="95" x="550" y="407.333">
-   <polygon points="0,0 18.6667,0.666667 20.6667,31.3333 -2.66667,32.6667"/>
-  </object>
-  <object id="97" x="421.638" y="534.667">
-   <polygon points="0,0 20.8,0.734694 23.0286,34.5306 -2.97143,36"/>
-  </object>
-  <object id="98" x="552.667" y="535.333">
-   <polygon points="0,0 18.6667,0.666667 20.6667,31.3333 -2.66667,32.6667"/>
-  </object>
-  <object id="99" x="288.667" y="605.167" width="412.667" height="66.1667"/>
-  <object id="100" x="671.333" y="577.333" width="31.3333" height="32.6667">
+  <object id="239" x="422" y="406" width="20" height="36"/>
+  <object id="240" x="548" y="405" width="24" height="38"/>
+  <object id="241" x="548" y="536" width="21" height="36"/>
+  <object id="242" x="422" y="535" width="21" height="34"/>
+  <object id="243" x="385" y="450" width="28" height="66"/>
+  <object id="244" x="579" y="453" width="25" height="53"/>
+  <object id="245" x="290.667" y="232" width="58" height="52">
    <ellipse/>
   </object>
-  <object id="101" x="721.333" y="594">
+  <object id="247" x="448" y="464" width="91.3333" height="68">
    <ellipse/>
   </object>
-  <object id="102" x="693.333" y="610.667">
-   <polygon points="0,0 3.33333,-57.3333 89.3333,-16.6667 88,-10 12,-9.33333 11.3333,0"/>
-  </object>
-  <object id="103" x="904" y="336.667">
-   <polygon points="0,0 -22.6667,-6 -39.3333,24 -13.3333,33.3333 9.33333,39.3333 21.3333,18.6667"/>
-  </object>
-  <object id="104" x="898" y="292.667">
-   <polygon points="0,0 0,22 25.3333,24.6667 26.6667,6.66667 14,-8.66667"/>
-  </object>
-  <object id="106" x="868" y="500" width="21.3333" height="36"/>
-  <object id="107" x="324.667" y="432.667" width="20.6667" height="40.6667"/>
-  <object id="108" x="208.667" y="593.333">
-   <polygon points="0,0 2,6.66667 78.6667,6.66667 80,17.3333 85.3333,17.3333 86,-42.6667"/>
-  </object>
-  <object id="109" x="384" y="449.333">
-   <polygon points="0,0 28.6667,11.3333 29.3333,51.3333 24.6667,62.6667 12,62 0,53.3333"/>
-  </object>
-  <object id="110" x="606.667" y="447.333">
-   <polygon points="0,0 -28.6667,11.3333 -29.3333,51.3333 -24.6667,62.6667 -12,62 0,53.3333"/>
-  </object>
-  <object id="112" x="671.333" y="390" width="30.6667" height="28.6667">
+  <object id="248" x="482.667" y="456" width="25.3333" height="50">
    <ellipse/>
   </object>
-  <object id="113" x="484.5" y="465">
-   <polygon points="0,0 -30.5,19 -34.5,32 -24.5,52 -0.5,64.5 21.5,67.5 46.5,53 53.5,39 54.5,38.5 58,18.5 38,4.5 19,-3"/>
-  </object>
-  <object id="114" x="681.333" y="114.667" width="13.3333" height="37.3333"/>
-  <object id="115" x="517.333" y="804" width="25.3333" height="28">
+  <object id="255" x="280" y="171.25" width="10.5" height="44.5"/>
+  <object id="256" x="291" y="209.75" width="75.25" height="6.75"/>
+  <object id="257" x="290.75" y="194.25" width="44.5" height="14"/>
+  <object id="258" x="291" y="186" width="29" height="7"/>
+  <object id="259" x="287.5" y="182.25" width="26" height="3.25"/>
+  <object id="261" x="295.625" y="135.625" width="9.75" height="5.125"/>
+  <object id="263" x="356.625" y="163.125" width="11.75" height="11.625">
    <ellipse/>
   </object>
-  <object id="116" x="677.333" y="802.667" width="22.6667" height="28">
+  <object id="265" x="355.125" y="205.5" width="12.5" height="11.625">
    <ellipse/>
   </object>
-  <object id="117" x="681.333" y="742.667" width="17.3333" height="21.3333">
-   <ellipse/>
+  <object id="267" x="331.25" y="197.75" width="20.25" height="12.75">
+   <capsule/>
   </object>
-  <object id="118" x="698.909" y="736.606" width="39.8788" height="29.5758">
-   <ellipse/>
+  <object id="268" x="350.75" y="206.5" width="9" height="6">
+   <capsule/>
   </object>
-  <object id="119" x="676.606" y="765.03" width="19.8788" height="22.6667">
-   <ellipse/>
+  <object id="269" x="288.25" y="173.75" width="17.75" height="10.75">
+   <capsule/>
   </object>
-  <object id="120" x="288" y="382" width="451" height="11"/>
-  <object id="121" x="284" y="380.667" width="12" height="135.333"/>
-  <object id="122" x="288" y="505.333">
-   <polygon points="0,0 -80.6667,42.6667 -78.6667,49.3333 -1.33333,12 6.66667,12 6.66667,-6.66667"/>
+  <object id="270" x="318.75" y="187.75" width="10.25" height="6.75">
+   <capsule/>
   </object>
-  <object id="124" x="692.667" y="385.333" width="16" height="131.333"/>
-  <object id="125" x="697.333" y="513.333">
-   <polygon points="0,0 83.3333,43.3333 85.3333,34.6667 7.33333,-8"/>
+  <object id="271" x="306.25" y="138.25" width="7.75" height="6.5">
+   <capsule/>
   </object>
-  <object id="126" x="728.667" y="328.667" width="9.33333" height="55.3333"/>
-  <object id="129" x="730.182" y="331.818">
-   <polygon points="0,0 84.3636,36.7273 85.8182,46 -0.909091,43.4545"/>
+  <object id="272" x="314.75" y="142" width="10" height="7.5">
+   <capsule/>
   </object>
-  <object id="134" x="769" y="224.333" width="30.3333" height="30.6667"/>
-  <object id="135" x="802" y="224" width="28.3333" height="29.3333"/>
-  <object id="136" x="773.5" y="852.167" width="20.5" height="24"/>
-  <object id="137" x="783.75" y="205.5"/>
-  <object id="138" x="816.25" y="207"/>
-  <object id="139" x="752.5" y="205.5"/>
-  <object id="140" x="485" y="466">
-   <polygon points="0,0 0.5,-23 6,-28.5 14.5,-29 21.5,-20.5 20,2"/>
+  <object id="273" x="326.5" y="148.25" width="11.25" height="8.5">
+   <capsule/>
   </object>
-  <object id="154" x="709" y="363" width="28" height="53"/>
+  <object id="274" x="321" y="145" width="7.5" height="7.25">
+   <capsule/>
+  </object>
+  <object id="275" x="333.5" y="150.75" width="12" height="9.25">
+   <capsule/>
+  </object>
+  <object id="276" x="342.75" y="157.25" width="16.25" height="10.75">
+   <capsule/>
+  </object>
  </objectgroup>
  <objectgroup color="#ff5500" id="25" name="inside-terrain" visible="0">
-  <object id="141" x="479" y="2">
+  <object id="141" x="481" y="0.666667">
    <polygon points="0,0 1.66667,124 -386,125 -386,250 -412,251 -420,248 -416,414 -353,414 -354,443 -455,442 -465,442 -459,451 -462,903 235,903 234,834 283,834 283,863 326,863 326,833 452,831 449,280 419,280 419,89 259,89 259,-3"/>
   </object>
  </objectgroup>

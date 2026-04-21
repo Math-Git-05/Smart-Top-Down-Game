@@ -24,8 +24,12 @@ class Camera:
 
     def update(self, target: pygame.sprite.Sprite):
         """Centra la camara en el target (jugador)."""
-        cx = target.rect.centerx - self.view_w // 2
-        cy = target.rect.centery - self.view_h // 2
+        self.focus_on_point(target.rect.centerx, target.rect.centery)
+
+    def focus_on_point(self, x: int | float, y: int | float):
+        """Centra la camara en un punto del mundo (para cinemáticas)."""
+        cx = int(x) - self.view_w // 2
+        cy = int(y) - self.view_h // 2
 
         self.offset_x = max(0, min(cx, self.map_width - self.view_w))
         self.offset_y = max(0, min(cy, self.map_height - self.view_h))

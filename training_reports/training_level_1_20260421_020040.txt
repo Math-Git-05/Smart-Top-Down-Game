@@ -1,0 +1,114 @@
+Atraco Tactico - Reporte de Entrenamiento IA
+Fecha: 2026-04-21T02:00:40
+Nivel: level_1
+Config: poblacion=20, generaciones=5, seleccion=tournament, cruce=uniform, mutacion=0.42x0.40, pesos(a/s/o/p)=1.65/1.65/2.10/1.45
+
+Resumen:
+- Gen 1: best=3377.6 | kills=2/5 | dmg=130 | stuck=40f | hongos=1 | success=0%
+- Gen 2: best=3381.0 | kills=2/5 | dmg=130 | stuck=40f | hongos=1 | success=0%
+- Gen 3: best=1845.5 | kills=1/5 | dmg=80 | stuck=40f | hongos=0 | success=0%
+- Gen 4: best=1845.5 | kills=1/5 | dmg=80 | stuck=40f | hongos=0 | success=0%
+- Gen 5: best=1845.5 | kills=1/5 | dmg=80 | stuck=40f | hongos=0 | success=0%
+- Validacion final: NO PASO | kills=1/5 | dmg=80 | tiempo=0.2s | stuck_max=40f | hongos=0
+
+Detalle por individuo:
+- gen=1/5 | ind=1/20 | fit=1711.61 | kills=1/5 | dmg=80 | t=0.16s | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=1/5 | ind=2/20 | fit=1844.72 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/5 | ind=3/20 | fit=1844.71 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/5 | ind=4/20 | fit=3377.65 | kills=2/5 | dmg=130 | t=0.15s | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=1/5 | ind=5/20 | fit=1845.45 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/5 | ind=6/20 | fit=1845.42 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/5 | ind=7/20 | fit=1844.78 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/5 | ind=8/20 | fit=1845.44 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/5 | ind=9/20 | fit=1844.65 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/5 | ind=10/20 | fit=1845.42 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/5 | ind=11/20 | fit=1845.37 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/5 | ind=12/20 | fit=1844.37 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/5 | ind=13/20 | fit=1845.40 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/5 | ind=14/20 | fit=1844.80 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/5 | ind=15/20 | fit=1845.37 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/5 | ind=16/20 | fit=1844.23 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/5 | ind=17/20 | fit=1844.73 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/5 | ind=18/20 | fit=1845.43 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/5 | ind=19/20 | fit=1844.21 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/5 | ind=20/20 | fit=1845.40 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/5 | ind=1/20 | fit=1844.74 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/5 | ind=2/20 | fit=1845.44 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/5 | ind=3/20 | fit=1845.44 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/5 | ind=4/20 | fit=1845.45 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/5 | ind=5/20 | fit=1845.38 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/5 | ind=6/20 | fit=1844.74 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/5 | ind=7/20 | fit=1845.41 | kills=1/5 | dmg=80 | t=0.16s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/5 | ind=8/20 | fit=1845.47 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/5 | ind=9/20 | fit=1845.42 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/5 | ind=10/20 | fit=1844.74 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/5 | ind=11/20 | fit=1844.69 | kills=1/5 | dmg=80 | t=0.16s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/5 | ind=12/20 | fit=1845.34 | kills=1/5 | dmg=80 | t=0.16s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/5 | ind=13/20 | fit=1845.38 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/5 | ind=14/20 | fit=3381.02 | kills=2/5 | dmg=130 | t=0.15s | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=2/5 | ind=15/20 | fit=1844.73 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/5 | ind=16/20 | fit=1844.71 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/5 | ind=17/20 | fit=1845.42 | kills=1/5 | dmg=80 | t=0.16s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/5 | ind=18/20 | fit=1845.38 | kills=1/5 | dmg=80 | t=0.16s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/5 | ind=19/20 | fit=1845.44 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/5 | ind=20/20 | fit=1845.43 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=1/20 | fit=1844.71 | kills=1/5 | dmg=80 | t=0.16s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=2/20 | fit=1845.42 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=3/20 | fit=1845.43 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=4/20 | fit=1845.46 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=5/20 | fit=1845.45 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=6/20 | fit=1845.42 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=7/20 | fit=1844.72 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=8/20 | fit=1845.42 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=9/20 | fit=1844.70 | kills=1/5 | dmg=80 | t=0.16s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=10/20 | fit=1833.11 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=11/20 | fit=1845.44 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=12/20 | fit=1845.43 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=13/20 | fit=1844.72 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=14/20 | fit=1845.41 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=15/20 | fit=1845.39 | kills=1/5 | dmg=80 | t=0.16s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=16/20 | fit=1845.43 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=17/20 | fit=1845.47 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=18/20 | fit=1844.72 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=19/20 | fit=1845.45 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/5 | ind=20/20 | fit=1845.44 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=1/20 | fit=1844.70 | kills=1/5 | dmg=80 | t=0.16s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=2/20 | fit=1845.38 | kills=1/5 | dmg=80 | t=0.16s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=3/20 | fit=1845.47 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=4/20 | fit=1845.44 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=5/20 | fit=1845.44 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=6/20 | fit=1845.39 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=7/20 | fit=1845.47 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=8/20 | fit=1845.45 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=9/20 | fit=1845.44 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=10/20 | fit=1845.36 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=11/20 | fit=1845.40 | kills=1/5 | dmg=80 | t=0.16s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=12/20 | fit=1845.42 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=13/20 | fit=1845.38 | kills=1/5 | dmg=80 | t=0.16s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=14/20 | fit=1845.45 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=15/20 | fit=1845.41 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=16/20 | fit=1845.44 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=17/20 | fit=1845.43 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=18/20 | fit=1845.42 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=19/20 | fit=1845.45 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/5 | ind=20/20 | fit=1845.44 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=1/20 | fit=1844.15 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=2/20 | fit=1845.47 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=3/20 | fit=1845.45 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=4/20 | fit=1845.47 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=5/20 | fit=1845.47 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=6/20 | fit=1845.42 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=7/20 | fit=1845.43 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=8/20 | fit=1845.45 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=9/20 | fit=1845.40 | kills=1/5 | dmg=80 | t=0.16s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=10/20 | fit=1845.46 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=11/20 | fit=1845.41 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=12/20 | fit=1845.45 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=13/20 | fit=1845.40 | kills=1/5 | dmg=80 | t=0.16s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=14/20 | fit=1845.46 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=15/20 | fit=1834.65 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=16/20 | fit=1845.42 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=17/20 | fit=1845.45 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=18/20 | fit=1832.35 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=19/20 | fit=1845.40 | kills=1/5 | dmg=80 | t=0.16s | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/5 | ind=20/20 | fit=1845.44 | kills=1/5 | dmg=80 | t=0.15s | stuck=40f | hongos=0 | ok=NO | motivo=timeout

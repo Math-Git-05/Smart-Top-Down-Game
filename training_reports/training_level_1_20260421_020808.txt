@@ -1,0 +1,19 @@
+Atraco Tactico - Reporte de Entrenamiento IA
+Fecha: 2026-04-21T02:08:08
+Nivel: level_1
+Config: poblacion=4, generaciones=2, seleccion=tournament, cruce=uniform, mutacion=0.30x0.30, pesos(a/s/o/p)=1.00/1.00/1.20/1.00
+
+Resumen:
+- Gen 1: best=3543.6 | kills=2/5 | dmg=130 | stuck=40f | hongos=1 | success=0%
+- Gen 2: best=3674.7 | kills=2/5 | dmg=130 | stuck=40f | hongos=0 | success=0%
+- Validacion final: NO PASO | kills=2/5 | dmg=130 | tiempo=0.6s | stuck_max=40f | hongos=0
+
+Detalle por individuo:
+- gen=1/2 | ind=1/4 | fit=2012.42 | kills=1/5 | dmg=80 | t=0.49s | frames=7600 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/2 | ind=2/4 | fit=2012.29 | kills=1/5 | dmg=80 | t=0.50s | frames=7600 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/2 | ind=3/4 | fit=2012.15 | kills=1/5 | dmg=80 | t=0.52s | frames=7600 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/2 | ind=4/4 | fit=3543.57 | kills=2/5 | dmg=130 | t=0.45s | frames=7600 | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=2/2 | ind=1/4 | fit=3545.76 | kills=2/5 | dmg=130 | t=0.48s | frames=7600 | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=2/2 | ind=2/4 | fit=3674.75 | kills=2/5 | dmg=130 | t=0.48s | frames=7600 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/2 | ind=3/4 | fit=2012.36 | kills=1/5 | dmg=80 | t=0.50s | frames=7600 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/2 | ind=4/4 | fit=3544.14 | kills=2/5 | dmg=130 | t=0.47s | frames=7600 | stuck=40f | hongos=1 | ok=NO | motivo=timeout

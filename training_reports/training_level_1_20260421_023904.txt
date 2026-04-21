@@ -1,0 +1,36 @@
+Atraco Tactico - Reporte de Entrenamiento IA
+Fecha: 2026-04-21T02:39:04
+Nivel: level_1
+Config: poblacion=8, generaciones=3, seleccion=tournament, cruce=uniform, mutacion=0.35x0.35, pesos(a/s/o/p)=1.65/1.65/2.10/1.45
+
+Resumen:
+- Gen 1: best=4297.3 | kills=2/5 | dmg=130 | stuck=40f | hongos=0 | success=0%
+- Gen 2: best=4396.5 | kills=2/5 | dmg=130 | stuck=40f | hongos=0 | success=0%
+- Gen 3: best=4396.9 | kills=2/5 | dmg=130 | stuck=40f | hongos=0 | success=0%
+- Validacion final: NO PASO | kills=2/5 | dmg=130 | sim_t=233.3s | real_t=1.1s | stuck_max=40f | hongos=0
+
+Detalle por individuo:
+- gen=1/3 | ind=1/8 | fit=4055.40 | kills=2/5 | dmg=145 | sim_t=200.00s | real_t=0.81s | frames=12000 | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=1/3 | ind=2/8 | fit=3998.41 | kills=2/5 | dmg=137 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=1/3 | ind=3/8 | fit=4189.93 | kills=2/5 | dmg=145 | sim_t=200.00s | real_t=0.82s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/3 | ind=4/8 | fit=4056.18 | kills=2/5 | dmg=145 | sim_t=200.00s | real_t=0.81s | frames=12000 | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=1/3 | ind=5/8 | fit=3952.74 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.80s | frames=12000 | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=1/3 | ind=6/8 | fit=4014.08 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.87s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/3 | ind=7/8 | fit=4051.84 | kills=2/5 | dmg=145 | sim_t=200.00s | real_t=0.81s | frames=12000 | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=1/3 | ind=8/8 | fit=4297.30 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.91s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/3 | ind=1/8 | fit=4297.30 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.92s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/3 | ind=2/8 | fit=4189.93 | kills=2/5 | dmg=145 | sim_t=200.00s | real_t=0.81s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/3 | ind=3/8 | fit=4303.04 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.92s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/3 | ind=4/8 | fit=4297.30 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.93s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/3 | ind=5/8 | fit=4297.42 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.91s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/3 | ind=6/8 | fit=4396.51 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.91s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/3 | ind=7/8 | fit=4297.37 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.92s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/3 | ind=8/8 | fit=4297.30 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.92s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/3 | ind=1/8 | fit=4396.51 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.93s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/3 | ind=2/8 | fit=4303.04 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.95s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/3 | ind=3/8 | fit=1921.20 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=0.97s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/3 | ind=4/8 | fit=4396.94 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.94s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/3 | ind=5/8 | fit=4396.87 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.93s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/3 | ind=6/8 | fit=4396.94 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=1.05s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/3 | ind=7/8 | fit=4396.56 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.96s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/3 | ind=8/8 | fit=4396.51 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.95s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout

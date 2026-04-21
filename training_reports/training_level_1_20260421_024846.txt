@@ -1,0 +1,137 @@
+Atraco Tactico - Reporte de Entrenamiento IA
+Fecha: 2026-04-21T02:48:46
+Nivel: level_1
+Config: poblacion=15, generaciones=8, seleccion=tournament, cruce=uniform, mutacion=0.21x0.46, pesos(a/s/o/p)=1.00/1.00/1.45/0.90
+
+Resumen:
+- Gen 1: best=4355.8 | kills=2/5 | dmg=130 | stuck=40f | hongos=0 | success=0%
+- Gen 2: best=4355.8 | kills=2/5 | dmg=130 | stuck=40f | hongos=0 | success=0%
+- Gen 3: best=4356.0 | kills=2/5 | dmg=130 | stuck=40f | hongos=0 | success=0%
+- Gen 4: best=4356.0 | kills=2/5 | dmg=130 | stuck=40f | hongos=0 | success=0%
+- Gen 5: best=4356.0 | kills=2/5 | dmg=130 | stuck=40f | hongos=0 | success=0%
+- Gen 6: best=4356.0 | kills=2/5 | dmg=130 | stuck=40f | hongos=0 | success=0%
+- Gen 7: best=4365.7 | kills=2/5 | dmg=130 | stuck=40f | hongos=0 | success=0%
+- Gen 8: best=4365.7 | kills=2/5 | dmg=130 | stuck=40f | hongos=0 | success=0%
+- Validacion final: NO PASO | kills=2/5 | dmg=130 | sim_t=233.3s | real_t=1.0s | stuck_max=40f | hongos=0
+
+Detalle por individuo:
+- gen=1/8 | ind=1/15 | fit=1821.75 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=0.92s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/8 | ind=2/15 | fit=1933.40 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=0.92s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/8 | ind=3/15 | fit=1822.03 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=0.93s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/8 | ind=4/15 | fit=4116.46 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.84s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/8 | ind=5/15 | fit=4355.75 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.86s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/8 | ind=6/15 | fit=1872.56 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=0.92s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/8 | ind=7/15 | fit=3999.45 | kills=2/5 | dmg=137 | sim_t=200.00s | real_t=0.78s | frames=12000 | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=1/8 | ind=8/15 | fit=1822.54 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=0.92s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/8 | ind=9/15 | fit=1814.76 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=0.91s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/8 | ind=10/15 | fit=1926.73 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=0.97s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/8 | ind=11/15 | fit=1809.47 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=0.93s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/8 | ind=12/15 | fit=1598.82 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=0.94s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/8 | ind=13/15 | fit=1900.50 | kills=1/5 | dmg=80 | sim_t=97.78s | real_t=0.44s | frames=5867 | stuck=40f | hongos=0 | ok=NO | motivo=dead
+- gen=1/8 | ind=14/15 | fit=4296.30 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.91s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/8 | ind=15/15 | fit=1756.96 | kills=1/5 | dmg=95 | sim_t=90.88s | real_t=0.44s | frames=5453 | stuck=62f | hongos=0 | ok=NO | motivo=dead
+- gen=2/8 | ind=1/15 | fit=4355.75 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/8 | ind=2/15 | fit=4296.30 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.89s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/8 | ind=3/15 | fit=4116.46 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.82s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/8 | ind=4/15 | fit=4355.75 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.82s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/8 | ind=5/15 | fit=4296.13 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.88s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/8 | ind=6/15 | fit=4296.30 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.89s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/8 | ind=7/15 | fit=1793.51 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=0.92s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/8 | ind=8/15 | fit=4116.41 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.84s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/8 | ind=9/15 | fit=4355.75 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/8 | ind=10/15 | fit=4296.30 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.89s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/8 | ind=11/15 | fit=4121.31 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/8 | ind=12/15 | fit=4351.47 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.82s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/8 | ind=13/15 | fit=4301.97 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.89s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/8 | ind=14/15 | fit=4206.88 | kills=2/5 | dmg=145 | sim_t=200.00s | real_t=0.79s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=2/8 | ind=15/15 | fit=4355.75 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.82s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/8 | ind=1/15 | fit=4355.75 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/8 | ind=2/15 | fit=4355.75 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.84s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/8 | ind=3/15 | fit=4355.75 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/8 | ind=4/15 | fit=4031.26 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.84s | frames=12000 | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=3/8 | ind=5/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.82s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/8 | ind=6/15 | fit=4004.13 | kills=2/5 | dmg=137 | sim_t=200.00s | real_t=0.77s | frames=12000 | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=3/8 | ind=7/15 | fit=4355.75 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.85s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/8 | ind=8/15 | fit=4355.75 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/8 | ind=9/15 | fit=4095.62 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.87s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/8 | ind=10/15 | fit=4355.75 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/8 | ind=11/15 | fit=4082.02 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.89s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/8 | ind=12/15 | fit=4004.42 | kills=2/5 | dmg=137 | sim_t=200.00s | real_t=0.78s | frames=12000 | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=3/8 | ind=13/15 | fit=1921.47 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=0.94s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/8 | ind=14/15 | fit=4355.75 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=3/8 | ind=15/15 | fit=3999.73 | kills=2/5 | dmg=137 | sim_t=200.00s | real_t=0.80s | frames=12000 | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=4/8 | ind=1/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/8 | ind=2/15 | fit=4355.75 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/8 | ind=3/15 | fit=4355.75 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/8 | ind=4/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/8 | ind=5/15 | fit=3966.09 | kills=2/5 | dmg=144 | sim_t=200.00s | real_t=0.81s | frames=12000 | stuck=60f | hongos=1 | ok=NO | motivo=timeout
+- gen=4/8 | ind=6/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.82s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/8 | ind=7/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.82s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/8 | ind=8/15 | fit=4355.75 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/8 | ind=9/15 | fit=4161.07 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.86s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/8 | ind=10/15 | fit=4004.27 | kills=2/5 | dmg=137 | sim_t=200.00s | real_t=0.79s | frames=12000 | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=4/8 | ind=11/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/8 | ind=12/15 | fit=4113.69 | kills=2/5 | dmg=152 | sim_t=200.00s | real_t=0.78s | frames=12000 | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=4/8 | ind=13/15 | fit=4095.62 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.88s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/8 | ind=14/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=4/8 | ind=15/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/8 | ind=1/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/8 | ind=2/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.81s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/8 | ind=3/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.81s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/8 | ind=4/15 | fit=1925.12 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=0.91s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/8 | ind=5/15 | fit=4355.75 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.81s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/8 | ind=6/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.81s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/8 | ind=7/15 | fit=4121.73 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/8 | ind=8/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/8 | ind=9/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.81s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/8 | ind=10/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.86s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/8 | ind=11/15 | fit=4101.77 | kills=2/5 | dmg=137 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=5/8 | ind=12/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/8 | ind=13/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.84s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/8 | ind=14/15 | fit=1820.34 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=0.93s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=5/8 | ind=15/15 | fit=4256.68 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.81s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=6/8 | ind=1/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.82s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=6/8 | ind=2/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.85s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=6/8 | ind=3/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.81s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=6/8 | ind=4/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=6/8 | ind=5/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=6/8 | ind=6/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.82s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=6/8 | ind=7/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.84s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=6/8 | ind=8/15 | fit=4103.24 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=6/8 | ind=9/15 | fit=1824.80 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=0.93s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=6/8 | ind=10/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=6/8 | ind=11/15 | fit=4095.62 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.87s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=6/8 | ind=12/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=6/8 | ind=13/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.82s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=6/8 | ind=14/15 | fit=4339.88 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.84s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=6/8 | ind=15/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=7/8 | ind=1/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=7/8 | ind=2/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=7/8 | ind=3/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=7/8 | ind=4/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.84s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=7/8 | ind=5/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=7/8 | ind=6/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=7/8 | ind=7/15 | fit=4095.62 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.85s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=7/8 | ind=8/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.81s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=7/8 | ind=9/15 | fit=4004.94 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.79s | frames=12000 | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=7/8 | ind=10/15 | fit=1822.37 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=0.94s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=7/8 | ind=11/15 | fit=4339.88 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.82s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=7/8 | ind=12/15 | fit=4121.68 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=7/8 | ind=13/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=7/8 | ind=14/15 | fit=4365.71 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.82s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=7/8 | ind=15/15 | fit=4355.96 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.82s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=8/8 | ind=1/15 | fit=4365.71 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.83s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=8/8 | ind=2/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.84s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=8/8 | ind=3/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.85s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=8/8 | ind=4/15 | fit=4101.81 | kills=2/5 | dmg=137 | sim_t=200.00s | real_t=0.85s | frames=12000 | stuck=40f | hongos=1 | ok=NO | motivo=timeout
+- gen=8/8 | ind=5/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.89s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=8/8 | ind=6/15 | fit=4348.57 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.92s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=8/8 | ind=7/15 | fit=4365.71 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.85s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=8/8 | ind=8/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.86s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=8/8 | ind=9/15 | fit=4201.17 | kills=2/5 | dmg=145 | sim_t=200.00s | real_t=0.84s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=8/8 | ind=10/15 | fit=1611.26 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=0.98s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=8/8 | ind=11/15 | fit=1922.69 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=1.00s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=8/8 | ind=12/15 | fit=4355.99 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.90s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=8/8 | ind=13/15 | fit=3944.14 | kills=2/5 | dmg=152 | sim_t=200.00s | real_t=0.80s | frames=12000 | stuck=60f | hongos=1 | ok=NO | motivo=timeout
+- gen=8/8 | ind=14/15 | fit=4263.11 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.84s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=8/8 | ind=15/15 | fit=4365.71 | kills=2/5 | dmg=130 | sim_t=200.00s | real_t=0.82s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout

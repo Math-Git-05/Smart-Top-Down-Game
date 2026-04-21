@@ -11,11 +11,14 @@
 # Si tu spritesheet tiene un layout distinto, ajusta ANIM_ROWS.
 # ============================================================
 
+import math
 import pygame
 import os
 from config.settings import (
     PLAYER_SPEED, PLAYER_MAX_HEALTH, PLAYER_MAX_SHIELD, PLAYER_MAX_ENERGY,
     PLAYER_ATTACK_DMGM, PLAYER_ATTACK_DMGR,
+    PLAYER_BULLET_SPEED,
+    PLAYER_RANGED_MANA_COST,
     SPRITES_DIR, TILE_SIZE
 )
 
@@ -36,11 +39,22 @@ ANIM_ROWS = {
 
 # ── Proyectil simple ──────────────────────────────────────────
 class Bullet(pygame.sprite.Sprite):
-    SPEED  = 7
+    SPEED  = PLAYER_BULLET_SPEED
     DAMAGE = PLAYER_ATTACK_DMGR
     COLOR  = (255, 220, 50)
 
-    def __init__(self, x, y, dx, dy, groups, collision_rects):
+    def __init__(
+        self,
+        x,
+        y,
+        dx,
+        dy,
+        groups,
+        collision_rects,
+        collision_mask=None,
+        dynamic_collision_getter=None,
+        map_bounds=None,
+    ):
         super().__init__(groups)
         self.image = pygame.Surface((8, 8), pygame.SRCALPHA)
         pygame.draw.circle(self.image, self.COLOR, (4, 4), 4)
@@ -48,18 +62,43 @@ class Bullet(pygame.sprite.Sprite):
         self._pos           = pygame.math.Vector2(x, y)
         self._vel           = pygame.math.Vector2(dx, dy).normalize() * self.SPEED
         self._col_rects     = collision_rects
+        self._col_mask      = collision_mask
+        self._dynamic_col_getter = dynamic_collision_getter
+        self._map_bounds    = map_bounds if map_bounds is not None else pygame.Rect(0, 0, 9999, 9999)
+        self._self_mask     = pygame.mask.from_surface(self.image)
         self.damage         = self.DAMAGE
 
-    def update(self, *args, **kwargs):
-        self._pos += self._vel
-        self.rect.center = (int(self._pos.x), int(self._pos.y))
-        # Destruir si choca con pared
+    def _hits_static_collision(self) -> bool:
+        if self._col_mask is not None:
+            return self._col_mask.overlap(self._self_mask, (self.rect.x, self.rect.y)) is not None
         for r in self._col_rects:
             if self.rect.colliderect(r):
+                return True
+        return False
+
+    def _hits_dynamic_collision(self) -> bool:
+        if not callable(self._dynamic_col_getter):
+            return False
+        for rect in self._dynamic_col_getter() or ():
+            if self.rect.colliderect(rect):
+                return True
+        return False
+
+    def update(self, *args, **kwargs):
+        distance = max(1, int(math.ceil(self._vel.length())))
+        step = self._vel / float(distance)
+
+        for _ in range(distance):
+            self._pos += step
+            self.rect.center = (int(self._pos.x), int(self._pos.y))
+
+            # Destruir si choca con pared/poligono
+            if self._hits_static_collision() or self._hits_dynamic_collision():
                 self.kill()
                 return
+
         # Destruir si sale del mapa
-        if not pygame.Rect(0, 0, 9999, 9999).contains(self.rect):
+        if not self._map_bounds.contains(self.rect):
             self.kill()
 
 
@@ -84,6 +123,7 @@ class Player(pygame.sprite.Sprite):
         self.shield     = PLAYER_MAX_SHIELD
         self.max_energy = PLAYER_MAX_ENERGY
         self.energy     = PLAYER_MAX_ENERGY
+        self.ranged_mana_cost = float(PLAYER_RANGED_MANA_COST)
         self.speed      = PLAYER_SPEED
         self.alive      = True
 
@@ -131,13 +171,14 @@ class Player(pygame.sprite.Sprite):
         self.rect  = self.image.get_rect(topleft=(x, y))
         
         # Hitbox (caja de colisión) un 70% más pequeña para dar máxima tolerancia y libertad de movimiento
-        self.hitbox = self.rect.inflate(-int(self.rect.width * 0.60), -int(self.rect.height * 0.70))
+        self.hitbox = self.rect.inflate(-int(self.rect.width * 0.65), -int(self.rect.height * 0.75))
         self._pos  = pygame.math.Vector2(self.hitbox.centerx, self.hitbox.centery)
         self._last_dx = 0
         self._last_dy = 0
         
         self.collision_mask = collision_mask
         self._last_hazard_damage_ms = 0
+        self.hazard_hits = 0
         if self.collision_mask:
             surf = pygame.Surface((self.hitbox.width, self.hitbox.height), pygame.SRCALPHA)
             surf.fill((255, 255, 255, 255))
@@ -225,12 +266,12 @@ class Player(pygame.sprite.Sprite):
                 self._anim_timer = 0
                 self._melee_attack(enemies)
                 action_locked = True
-            elif keys[pygame.K_x] and self._ranged_cd == 0 and self.energy >= 20: # Costo energia
+            elif keys[pygame.K_x] and self._ranged_cd == 0 and self.energy >= self.ranged_mana_cost:
                 self.state = "shoot"
                 self._frame_index = 0
                 self._anim_timer = 0
-                self.energy -= 20
-                self._ranged_attack()
+                self.energy -= self.ranged_mana_cost
+                self._ranged_attack(game_map)
                 action_locked = True
         
         # Movimiento base si no estamos atacando/bloqueados
@@ -339,7 +380,9 @@ class Player(pygame.sprite.Sprite):
         for rect in hazard_rects:
             if self.hitbox.colliderect(rect):
                 self._last_hazard_damage_ms = now
-                self.take_damage(10)
+                self.hazard_hits += 1
+                # Hongos: daño fuerte por contacto (50% de la vida máxima).
+                self.take_damage(int(self.max_health * 0.5))
                 break
 
     # ── Animación ─────────────────────────────────────────────
@@ -384,28 +427,84 @@ class Player(pygame.sprite.Sprite):
         self._melee_cd = 40
         if not enemies:
             return
-        RANGE = TILE_SIZE * 1.5
-        offsets = {"down": (0,1), "up": (0,-1), "left": (-1,0), "right": (1,0)}
-        ox, oy = offsets[self.direction]
-        hit_x  = self.rect.centerx + ox * RANGE
-        hit_y  = self.rect.centery + oy * RANGE
+        reach = float(TILE_SIZE * 1.28)
+        forward = {
+            "down": pygame.math.Vector2(0.0, 1.0),
+            "up": pygame.math.Vector2(0.0, -1.0),
+            "left": pygame.math.Vector2(-1.0, 0.0),
+            "right": pygame.math.Vector2(1.0, 0.0),
+        }.get(self.direction, pygame.math.Vector2(0.0, 1.0))
+        player_center = pygame.math.Vector2(float(self.hitbox.centerx), float(self.hitbox.centery))
         for enemy in enemies:
-            dist = pygame.math.Vector2(
-                enemy.rect.centerx - hit_x,
-                enemy.rect.centery - hit_y
-            ).length()
-            if dist < RANGE:
-                enemy.take_damage(PLAYER_ATTACK_DMGM)
+            enemy_hitbox = getattr(enemy, "hitbox", enemy.rect)
+            enemy_center = pygame.math.Vector2(float(enemy_hitbox.centerx), float(enemy_hitbox.centery))
+            to_enemy = enemy_center - player_center
+            distance = float(to_enemy.length())
+            if distance > reach:
+                continue
+            if distance > 1e-6:
+                facing = to_enemy.normalize().dot(forward)
+                if facing < 0.12:
+                    continue
+            enemy.take_damage(PLAYER_ATTACK_DMGM)
 
-    def _ranged_attack(self):
+    def fire_ranged_at(self, target_world_x: float, target_world_y: float, game_map=None) -> bool:
+        if not self.alive:
+            return False
+        if self.state in ("attack", "shoot", "hit", "defend"):
+            return False
+        if self._ranged_cd > 0 or self.energy < self.ranged_mana_cost:
+            return False
+
+        aim = pygame.math.Vector2(
+            float(target_world_x) - float(self.rect.centerx),
+            float(target_world_y) - float(self.rect.centery),
+        )
+        if aim.length_squared() <= 1e-6:
+            return False
+
+        # Actualiza la direccion para mantener coherencia de animaciones.
+        if abs(aim.x) >= abs(aim.y):
+            self.direction = "right" if aim.x >= 0 else "left"
+        else:
+            self.direction = "down" if aim.y >= 0 else "up"
+
+        self.state = "shoot"
+        self._frame_index = 0
+        self._anim_timer = 0
+        self.energy -= self.ranged_mana_cost
+        self._ranged_attack(game_map, direction_vec=aim.normalize())
+        return True
+
+    def _ranged_attack(self, game_map=None, direction_vec: pygame.math.Vector2 | None = None):
         self._ranged_cd = 30
-        offsets = {"down": (0,1), "up": (0,-1), "left": (-1,0), "right": (1,0)}
-        dx, dy = offsets[self.direction]
+
+        if direction_vec is None:
+            offsets = {"down": (0, 1), "up": (0, -1), "left": (-1, 0), "right": (1, 0)}
+            dx, dy = offsets[self.direction]
+            direction_vec = pygame.math.Vector2(float(dx), float(dy))
+        else:
+            direction_vec = pygame.math.Vector2(direction_vec)
+
+        if direction_vec.length_squared() <= 1e-6:
+            direction_vec = pygame.math.Vector2(0.0, 1.0)
+        else:
+            direction_vec = direction_vec.normalize()
+
+        dynamic_collision_getter = game_map.get_dynamic_collisions if game_map else None
+        map_bounds = (
+            pygame.Rect(0, 0, int(game_map.map_width), int(game_map.map_height))
+            if game_map is not None
+            else pygame.Rect(0, 0, 9999, 9999)
+        )
         Bullet(
             self.rect.centerx, self.rect.centery,
-            dx, dy,
+            float(direction_vec.x), float(direction_vec.y),
             (self.bullet_group,),
-            self.collision_rects
+            self.collision_rects,
+            collision_mask=self.collision_mask,
+            dynamic_collision_getter=dynamic_collision_getter,
+            map_bounds=map_bounds,
         )
 
     def _start_defend(self):
@@ -415,13 +514,28 @@ class Player(pygame.sprite.Sprite):
 
     # ── Recibir daño ──────────────────────────────────────────
     def take_damage(self, amount: int):
-        if not self.alive: return
-        
-        if self.is_defending and self.shield > 0:
-            self.shield = max(0, self.shield - amount * 0.5)
-            amount = amount * 0.5
-            
-        self.health = max(0, self.health - amount)
+        if not self.alive:
+            return
+
+        incoming = max(0.0, float(amount))
+        if incoming <= 0.0:
+            return
+
+        # El escudo siempre absorbe una parte; defendiendo absorbe mas.
+        if self.shield > 0.0:
+            absorb_ratio = 1.0 if self.is_defending else 0.70
+            absorbed = min(float(self.shield), incoming * absorb_ratio)
+            self.shield = max(0.0, float(self.shield) - absorbed)
+            incoming = max(0.0, incoming - absorbed)
+            if self.shield <= 0.0:
+                self.shield_broken = True
+
+        # Defensa activa: reduce tambien el dano residual.
+        if self.is_defending and incoming > 0.0:
+            incoming *= 0.55
+
+        final_damage = int(max(0, round(incoming)))
+        self.health = max(0, self.health - final_damage)
         self.state = "hit"   # trigger knockback/hit anim
         self._frame_index = 0
         self._anim_timer = 0

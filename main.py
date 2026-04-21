@@ -1,30 +1,96 @@
-﻿# ============================================================
-#  main.py - Entry point | Smart Top Down
-#           "Encuentra el Mangu Legendario"
+# ============================================================
+#  main.py - Atraco Tactico
+#  Menu + Sandbox + Backoffice (training/benchmark)
 # ============================================================
 
-import os
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+import math
+from pathlib import Path
+import random
 import sys
 
 import pygame
 
+from ai.genetic_algorithm import (
+    GENE_ORDER,
+    GeneticConfig,
+    Genome,
+    create_population,
+    default_genome,
+    evolve_population,
+)
+from ai.rl_agent import AutoPlayerAgent, decision_to_keys
 from config.settings import (
-    SCREEN_WIDTH,
-    SCREEN_HEIGHT,
-    SCREEN_TITLE,
-    FPS,
-    MAP_FILE,
-    SPRITES_DIR,
     COLOR_BG,
-    LAYER_PUERTA_CLOSED,
-    LAYER_PUERTA_OPEN,
+    FPS,
     LAYER_COFRE_CLOSED,
     LAYER_COFRE_OPEN,
+    LAYER_PUERTA_CLOSED,
+    LAYER_PUERTA_OPEN,
+    MAP_FILE,
+    SCREEN_HEIGHT,
+    SCREEN_TITLE,
+    SCREEN_WIDTH,
+    SPRITES_DIR,
 )
-from infrastructure.map_loader import MapLoader
-from infrastructure.renderer import Camera, Renderer
-from core.player import Player
+from core.enemy import EnemyTypeA, EnemyTypeB, EnemyTypeC
 from core.item_manager import ItemManager
+from core.player import Player
+from infrastructure.map_loader import MapLoader
+from infrastructure.menu_screen import AgentMenuConfig, MenuResult, run_main_menu
+from infrastructure.renderer import Camera, Renderer
+from infrastructure.sandbox_map import SandboxMap
+from systems.pathfinding import build_route_hint
+
+ENEMIES_TO_CLEAR_LEVEL_1 = 5
+
+
+@dataclass(slots=True)
+class SessionConfig:
+    level_id: str
+    manual: bool
+    use_agent: bool
+    sandbox_enemy_count: int
+    render: bool
+    max_frames: int
+    agent_genome: Genome | None = None
+    path_hint: tuple[tuple[int, int], ...] | None = None
+    backoffice_overlay: bool = False
+    population_preview: int = 0
+    generation_preview: int = 1
+    selection_preview: str = ""
+    crossover_preview: str = ""
+
+
+@dataclass(slots=True)
+class SessionResult:
+    level_id: str
+    success: bool
+    reason: str
+    enemies_killed: int
+    total_enemies: int
+    objective_complete: bool
+    elapsed_ms: int
+    elapsed_frames: int
+    health_left: float
+    player_alive: bool
+    damage_dealt: float = 0.0
+    max_still_frames: int = 0
+    distance_moved: float = 0.0
+    hazard_hits: int = 0
+    trace_points: tuple[tuple[int, int], ...] = ()
+    route_hint: tuple[tuple[int, int], ...] = ()
+
+
+@dataclass(slots=True)
+class RuntimeState:
+    best_genome: Genome
+    best_path_hint: tuple[tuple[int, int], ...] = ()
+    best_genome_by_level: dict[str, Genome] | None = None
+    best_path_hint_by_level: dict[str, tuple[tuple[int, int], ...]] | None = None
 
 
 def _build_layer_trigger_rect(game_map, layer_name: str, inflate: int = 20):
@@ -39,55 +105,580 @@ def _build_layer_trigger_rect(game_map, layer_name: str, inflate: int = 20):
     return merged.inflate(inflate, inflate)
 
 
-def main() -> str:
-    pygame.init()
-    pygame.mixer.init()
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption(SCREEN_TITLE)
-    clock = pygame.time.Clock()
+def _screen_to_world(mouse_pos: tuple[int, int], camera: Camera, renderer: Renderer) -> tuple[float, float]:
+    rw = float(renderer.screen.get_width())
+    rh = float(renderer.screen.get_height())
+    mx, my = mouse_pos
+    local_x = (float(mx) / max(1.0, float(SCREEN_WIDTH))) * rw
+    local_y = (float(my) / max(1.0, float(SCREEN_HEIGHT))) * rh
+    return local_x + float(camera.offset_x), local_y + float(camera.offset_y)
 
-    print(f"[main] Cargando mapa: {MAP_FILE}")
-    try:
-        game_map = MapLoader(MAP_FILE)
 
-        # Puerta: abierta al iniciar intro
+def _prepare_level(level_id: str, sandbox_enemy_count: int):
+    if level_id == "sandbox":
+        game_map = SandboxMap()
         if LAYER_PUERTA_CLOSED in game_map.layer_visible:
-            game_map.layer_visible[LAYER_PUERTA_CLOSED] = False
+            game_map.layer_visible[LAYER_PUERTA_CLOSED] = True
         if LAYER_PUERTA_OPEN in game_map.layer_visible:
-            game_map.layer_visible[LAYER_PUERTA_OPEN] = True
+            game_map.layer_visible[LAYER_PUERTA_OPEN] = False
 
-        # Cofre: cerrado visible, abierto invisible
+        spawn_x = game_map.map_width // 2
+        spawn_y = game_map.map_height - (game_map.tile_h * 3)
+        exit_rect = game_map.exit_rect.inflate(20, 16)
+        enemy_count = max(1, int(sandbox_enemy_count))
+        item_manager = ItemManager(game_map)
+        return game_map, item_manager, spawn_x, spawn_y, exit_rect, enemy_count
+
+    if level_id == "level_1":
+        game_map = MapLoader(MAP_FILE)
+        if LAYER_PUERTA_CLOSED in game_map.layer_visible:
+            game_map.layer_visible[LAYER_PUERTA_CLOSED] = True
+        if LAYER_PUERTA_OPEN in game_map.layer_visible:
+            game_map.layer_visible[LAYER_PUERTA_OPEN] = False
         if LAYER_COFRE_CLOSED in game_map.layer_visible:
             game_map.layer_visible[LAYER_COFRE_CLOSED] = True
         if LAYER_COFRE_OPEN in game_map.layer_visible:
             game_map.layer_visible[LAYER_COFRE_OPEN] = False
-    except Exception as e:
-        print(f"[ERROR] No se pudo cargar el mapa: {e}")
-        print("  Asegurate de que assets/maps/level1.tmx existe.")
-        print("  Mientras tanto se usara un mapa en negro de placeholder.")
-        game_map = None
 
-    map_w = game_map.map_width if game_map else SCREEN_WIDTH * 2
-    map_h = game_map.map_height if game_map else SCREEN_HEIGHT * 2
+        # Inicio en la entrada inferior; la intro lo mueve al punto jugable.
+        spawn_x = 24 * 32
+        spawn_y = 26 * 32
+        exit_rect = _build_layer_trigger_rect(game_map, LAYER_PUERTA_CLOSED, inflate=26)
+        if exit_rect is None:
+            exit_rect = pygame.Rect(spawn_x - 20, spawn_y - 120, 40, 60)
+
+        enemy_count = ENEMIES_TO_CLEAR_LEVEL_1
+        item_manager = ItemManager(game_map)
+        return game_map, item_manager, spawn_x, spawn_y, exit_rect, enemy_count
+
+    raise RuntimeError(f"Nivel no implementado: {level_id}")
+
+
+def _is_walkable_spawn(game_map, x: float, y: float) -> bool:
+    if hasattr(game_map, "is_inside_play_area") and not game_map.is_inside_play_area(x, y):
+        return False
+    probe = pygame.Rect(int(x) - 11, int(y) - 11, 22, 22)
+    collision_mask = getattr(game_map, "collision_mask", None)
+    if collision_mask is not None:
+        sample_mask = pygame.mask.Mask((probe.width, probe.height), fill=True)
+        if collision_mask.overlap(sample_mask, (probe.x, probe.y)) is not None:
+            return False
+    else:
+        if any(probe.colliderect(rect) for rect in getattr(game_map, "collision_rects", [])):
+            return False
+
+    if any(probe.colliderect(rect) for rect in (game_map.get_dynamic_collisions() if hasattr(game_map, "get_dynamic_collisions") else [])):
+        return False
+    return True
+
+
+def _clamp_gene(value: float, gene_min: float = -2.0, gene_max: float = 2.0) -> float:
+    return max(gene_min, min(gene_max, float(value)))
+
+
+def _compress_trace_points(
+    trace: tuple[tuple[int, int], ...] | list[tuple[int, int]],
+    min_step: float = 18.0,
+    max_points: int = 320,
+) -> tuple[tuple[int, int], ...]:
+    if not trace:
+        return ()
+    compressed: list[tuple[int, int]] = [tuple(trace[0])]
+    last = pygame.Vector2(float(compressed[0][0]), float(compressed[0][1]))
+    for point in trace[1:]:
+        px, py = int(point[0]), int(point[1])
+        vec = pygame.Vector2(float(px), float(py))
+        if vec.distance_to(last) >= float(min_step):
+            compressed.append((px, py))
+            last = vec
+            if len(compressed) >= max_points:
+                break
+    return tuple(compressed[:max_points])
+
+
+def _build_episode_route_hint(game_map, player: Player, enemy_group: pygame.sprite.Group) -> tuple[tuple[int, int], ...]:
+    enemy_points: list[tuple[int, int]] = [
+        (int(enemy.rect.centerx), int(enemy.rect.centery))
+        for enemy in enemy_group
+    ]
+    if not enemy_points:
+        return ()
+    route = build_route_hint(
+        game_map=game_map,
+        start_world=(int(player.hitbox.centerx), int(player.hitbox.centery)),
+        goal_world_points=enemy_points,
+        max_points=360,
+    )
+    return _compress_trace_points(route, min_step=14.0, max_points=320)
+
+
+def _choose_training_seed(level: str, runtime_state: RuntimeState) -> tuple[Genome | None, tuple[tuple[int, int], ...]]:
+    by_level_genome = runtime_state.best_genome_by_level or {}
+    by_level_hint = runtime_state.best_path_hint_by_level or {}
+
+    if level in by_level_genome:
+        return by_level_genome[level].copy(), tuple(by_level_hint.get(level, ()))
+
+    if level == "level_1" and "sandbox" in by_level_genome:
+        return by_level_genome["sandbox"].copy(), tuple(by_level_hint.get("sandbox", ()))
+
+    if runtime_state.best_genome is not None:
+        return runtime_state.best_genome.copy(), tuple(getattr(runtime_state, "best_path_hint", ()))
+
+    return None, ()
+
+
+def _seed_population_around_genome(
+    population: list[Genome],
+    seed_genome: Genome | None,
+    config: GeneticConfig,
+    rng: random.Random,
+):
+    if seed_genome is None or not population:
+        return
+    population[0] = seed_genome.copy()
+    seed_count = min(len(population) - 1, max(1, len(population) // 2))
+    for idx in range(1, seed_count + 1):
+        g = seed_genome.copy()
+        for name in GENE_ORDER:
+            base = float(g.genes.get(name, 1.0))
+            delta = rng.uniform(-float(config.mutation_scale), float(config.mutation_scale)) * 1.15
+            g.genes[name] = _clamp_gene(base + delta, float(config.gene_min), float(config.gene_max))
+        g.fitness = 0.0
+        population[idx] = g
+
+
+def _apply_level_gene_freeze(genome: Genome, level: str, generation_idx: int, total_generations: int):
+    if level != "level_1":
+        return
+    freeze_until = max(2, int(max(1, total_generations) * 0.5))
+    if generation_idx < freeze_until:
+        # Nivel 1 inicial: priorizar movimiento y melee, no punteria ranged.
+        genome.genes["aim"] = 1.0
+
+
+def _spawn_near_player(player: Player, game_map, enemy_count: int) -> list[pygame.Vector2]:
+    center = pygame.Vector2(float(player.hitbox.centerx), float(player.hitbox.centery))
+    points: list[pygame.Vector2] = []
+
+    for radius in (130.0, 170.0, 210.0, 250.0):
+        for idx in range(16):
+            ang = (math.tau * idx) / 16.0
+            px = center.x + math.cos(ang) * radius
+            py = center.y + math.sin(ang) * radius
+            if hasattr(game_map, "is_inside_play_area") and not game_map.is_inside_play_area(px, py):
+                continue
+            if not _is_walkable_spawn(game_map, px, py):
+                continue
+            candidate = pygame.Vector2(px, py)
+            if any(candidate.distance_to(other) < 70.0 for other in points):
+                continue
+            points.append(candidate)
+            if len(points) >= enemy_count:
+                return points
+    return points
+
+
+def _stable_spawn_candidates(game_map, item_manager) -> list[pygame.Vector2]:
+    candidates: list[pygame.Vector2] = []
+
+    # Prefer spawn-zone points from inside-terrain (already filtered by collisions in ItemManager).
+    walkable = getattr(item_manager, "walkable_points", None) if item_manager is not None else None
+    if walkable:
+        for x, y in walkable:
+            candidates.append(pygame.Vector2(float(x), float(y)))
+    elif hasattr(game_map, "_spawn_points"):
+        for x, y in getattr(game_map, "_spawn_points", []):
+            candidates.append(pygame.Vector2(float(x), float(y)))
+
+    # Deterministic ordering independent from random calls.
+    candidates.sort(key=lambda p: (int(p.y), int(p.x)))
+    return candidates
+
+
+def _stable_enemy_spawn_points(
+    player: Player,
+    game_map,
+    item_manager,
+    enemy_count: int,
+    existing_points: list[pygame.Vector2] | None = None,
+    min_player_distance: float = 120.0,
+    min_between_distance: float = 64.0,
+) -> list[pygame.Vector2]:
+    if enemy_count <= 0:
+        return []
+
+    player_center = pygame.Vector2(float(player.hitbox.centerx), float(player.hitbox.centery))
+    existing = [pygame.Vector2(float(p.x), float(p.y)) for p in (existing_points or [])]
+
+    raw_candidates = _stable_spawn_candidates(game_map, item_manager)
+    if not raw_candidates:
+        return []
+
+    # Keep only valid and reasonably separated points from player/existing enemies.
+    filtered: list[pygame.Vector2] = []
+    for point in raw_candidates:
+        if point.distance_to(player_center) < float(min_player_distance):
+            continue
+        if any(point.distance_to(other) < float(min_between_distance) for other in existing):
+            continue
+        if not _is_walkable_spawn(game_map, point.x, point.y):
+            continue
+        filtered.append(point)
+
+    if not filtered:
+        return []
+
+    # Deterministic farthest-point sampling.
+    selected: list[pygame.Vector2] = []
+    pool = filtered.copy()
+
+    first = max(
+        pool,
+        key=lambda p: (
+            p.distance_to(player_center),
+            -abs(float(p.x) - float(player_center.x)),
+            -float(p.y),
+            -float(p.x),
+        ),
+    )
+    selected.append(first)
+    pool.remove(first)
+
+    while len(selected) < enemy_count and pool:
+        best_point = None
+        best_score = -1.0
+        for point in pool:
+            if any(point.distance_to(other) < float(min_between_distance) for other in (selected + existing)):
+                continue
+            nearest_selected = min(point.distance_to(other) for other in selected)
+            score = (nearest_selected * 1.0) + (point.distance_to(player_center) * 0.35)
+            if score > best_score:
+                best_score = score
+                best_point = point
+            elif best_point is not None and abs(score - best_score) <= 1e-6:
+                # Stable tie-breaker.
+                if (int(point.y), int(point.x)) < (int(best_point.y), int(best_point.x)):
+                    best_point = point
+        if best_point is None:
+            break
+        selected.append(best_point)
+        pool.remove(best_point)
+
+    return selected[:enemy_count]
+
+
+def _spawn_enemies(
+    player: Player,
+    enemy_group: pygame.sprite.Group,
+    all_sprites: pygame.sprite.Group,
+    game_map,
+    item_manager,
+    enemy_count: int,
+    level_id: str = "",
+    prefer_near_player: bool = False,
+    existing_points: list[pygame.Vector2] | None = None,
+):
+    spawn_points = []
+    forced_enemy_classes: list[type | None] = []
+
+    def _append_unique(points, forced_cls: type | None = None):
+        for point in points:
+            if len(spawn_points) >= enemy_count:
+                break
+            candidate = pygame.Vector2(float(point.x), float(point.y))
+            if hasattr(game_map, "is_inside_play_area") and not game_map.is_inside_play_area(candidate.x, candidate.y):
+                continue
+            if not _is_walkable_spawn(game_map, candidate.x, candidate.y):
+                continue
+            occupied = spawn_points
+            if existing_points:
+                occupied = spawn_points + existing_points
+            if any(candidate.distance_to(existing) < 64.0 for existing in occupied):
+                continue
+            spawn_points.append(candidate)
+            forced_enemy_classes.append(forced_cls)
+
+    if level_id == "level_1" and not prefer_near_player and not existing_points:
+        # Fixed anchors for reproducible level-1 training.
+        # The previous top-right spawn was under a tree; moved to x~590 and set as moving enemy.
+        level_1_fixed_spawns: list[tuple[pygame.Vector2, type]] = [
+            (pygame.Vector2(48.0, 816.0), EnemyTypeC),
+            (pygame.Vector2(112.0, 176.0), EnemyTypeA),
+            (pygame.Vector2(400.0, 528.0), EnemyTypeB),
+            (pygame.Vector2(688.0, 48.0), EnemyTypeA),
+            (pygame.Vector2(592.0, 720.0), EnemyTypeA),
+        ]
+        for point, enemy_cls in level_1_fixed_spawns:
+            _append_unique([point], forced_cls=enemy_cls)
+            if len(spawn_points) >= enemy_count:
+                break
+
+    # Fixed deterministic spawns for reproducible training/benchmark.
+    _append_unique(
+        _stable_enemy_spawn_points(
+            player=player,
+            game_map=game_map,
+            item_manager=item_manager,
+            enemy_count=enemy_count,
+            existing_points=existing_points,
+            min_player_distance=(110.0 if prefer_near_player else 126.0),
+            min_between_distance=64.0,
+        )
+    )
+
+    # Deterministic fallback: near-player rings (still stable, no RNG).
+    if len(spawn_points) < enemy_count:
+        _append_unique(_spawn_near_player(player, game_map, enemy_count))
+
+    # Last deterministic pass with reduced player-distance constraint.
+    if len(spawn_points) < enemy_count:
+        _append_unique(
+            _stable_enemy_spawn_points(
+                player=player,
+                game_map=game_map,
+                item_manager=item_manager,
+                enemy_count=enemy_count,
+                existing_points=(existing_points or []) + spawn_points,
+                min_player_distance=48.0,
+                min_between_distance=48.0,
+            )
+        )
+
+    enemy_classes = [EnemyTypeA, EnemyTypeB, EnemyTypeC, EnemyTypeA, EnemyTypeB, EnemyTypeC]
+    for idx, pos in enumerate(spawn_points):
+        forced_cls = forced_enemy_classes[idx] if idx < len(forced_enemy_classes) else None
+        enemy_cls = forced_cls if forced_cls is not None else enemy_classes[idx % len(enemy_classes)]
+        enemy_cls(
+            x=int(pos.x),
+            y=int(pos.y),
+            groups=(all_sprites, enemy_group),
+        )
+
+
+def _draw_agent_overlay(screen: pygame.Surface, cfg: SessionConfig, genome: Genome | None, elapsed_ms: int):
+    panel = pygame.Rect(12, SCREEN_HEIGHT - 166, 430, 152)
+    pygame.draw.rect(screen, (8, 14, 18, 196), panel, border_radius=10)
+    pygame.draw.rect(screen, (78, 122, 136), panel, width=2, border_radius=10)
+
+    font = pygame.font.SysFont("consolas", 16)
+    line1 = font.render(f"Modo agente: {cfg.level_id}", True, (235, 240, 245))
+    line2 = font.render(f"Tiempo: {elapsed_ms / 1000.0:.1f}s", True, (200, 220, 235))
+    screen.blit(line1, (panel.x + 10, panel.y + 10))
+    screen.blit(line2, (panel.x + 10, panel.y + 30))
+
+    line3 = font.render(
+        f"Poblacion: {max(0, int(cfg.population_preview))} | Generaciones: {max(1, int(cfg.generation_preview))}",
+        True,
+        (220, 214, 186),
+    )
+    screen.blit(line3, (panel.x + 10, panel.y + 50))
+    if cfg.selection_preview or cfg.crossover_preview:
+        line_sel = font.render(
+            f"Seleccion: {cfg.selection_preview or '-'} | Cruce: {cfg.crossover_preview or '-'}",
+            True,
+            (206, 224, 178),
+        )
+        screen.blit(line_sel, (panel.x + 10, panel.y + 72))
+
+    if genome is None:
+        return
+    g = genome.genes
+    line4 = font.render(
+        "a:{:.2f} s:{:.2f} o:{:.2f} sp:{:.2f} aim:{:.2f} p:{:.2f} u:{:.2f}".format(
+            float(g.get("aggression", 0.0)),
+            float(g.get("survival", 0.0)),
+            float(g.get("objective", 0.0)),
+            float(g.get("spacing", 0.0)),
+            float(g.get("aim", 0.0)),
+            float(g.get("pathing", 0.0)),
+            float(g.get("unstuck", 0.0)),
+        ),
+        True,
+        (255, 214, 128),
+    )
+    screen.blit(line4, (panel.x + 10, panel.y + 92))
+
+    pop = max(0, int(cfg.population_preview))
+    preview = min(pop, 30)
+    if preview <= 0:
+        return
+    cols = 10
+    dot_size = 8
+    start_x = panel.x + 12
+    start_y = panel.y + 114
+    for idx in range(preview):
+        color = pygame.Color(0)
+        color.hsva = ((idx * 33) % 360, 65, 96, 100)
+        col = idx % cols
+        row = idx // cols
+        x = start_x + col * (dot_size + 5)
+        y = start_y + row * (dot_size + 5)
+        pygame.draw.rect(screen, color, (x, y, dot_size, dot_size), border_radius=2)
+
+
+def _get_pointer_origin_and_direction(
+    player: Player,
+    camera: Camera,
+    renderer: Renderer,
+    mouse_pos: tuple[int, int] | None = None,
+) -> tuple[pygame.Vector2, pygame.Vector2]:
+    origin = pygame.Vector2(float(player.hitbox.centerx), float(player.hitbox.centery))
+    if mouse_pos is None:
+        mouse_pos = pygame.mouse.get_pos()
+    mouse_world_x, mouse_world_y = _screen_to_world(mouse_pos, camera, renderer)
+    direction = pygame.Vector2(mouse_world_x - origin.x, mouse_world_y - origin.y)
+    if direction.length_squared() <= 1e-6:
+        fallback = {
+            "up": pygame.Vector2(0.0, -1.0),
+            "down": pygame.Vector2(0.0, 1.0),
+            "left": pygame.Vector2(-1.0, 0.0),
+            "right": pygame.Vector2(1.0, 0.0),
+        }
+        direction = fallback.get(getattr(player, "direction", "down"), pygame.Vector2(0.0, 1.0))
+    else:
+        direction = direction.normalize()
+    return origin, direction
+
+
+def _draw_shot_pointer(surface: pygame.Surface, camera: Camera, player: Player, renderer: Renderer):
+    origin, direction = _get_pointer_origin_and_direction(player, camera, renderer)
+    start = origin + (direction * 10.0)
+    end = origin + (direction * 72.0)
+
+    sx, sy = camera.apply_pos(int(start.x), int(start.y))
+    ex, ey = camera.apply_pos(int(end.x), int(end.y))
+
+    overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+    pygame.draw.line(overlay, (244, 224, 168, 92), (sx, sy), (ex, ey), 1)
+    pygame.draw.circle(overlay, (244, 224, 168, 118), (ex, ey), 2)
+    surface.blit(overlay, (0, 0))
+
+
+def _draw_enemy_health_bars(surface: pygame.Surface, camera: Camera, enemy_group: pygame.sprite.Group):
+    for enemy in enemy_group:
+        max_hp = max(1.0, float(getattr(enemy, "max_health", 1.0)))
+        cur_hp = max(0.0, min(max_hp, float(getattr(enemy, "health", max_hp))))
+        ratio = cur_hp / max_hp
+
+        enemy_rect = camera.apply(getattr(enemy, "rect", pygame.Rect(0, 0, 0, 0)))
+        bar_w = max(26, min(48, enemy_rect.width + 8))
+        bar_h = 5
+        bar_x = enemy_rect.centerx - (bar_w // 2)
+        bar_y = enemy_rect.y - 10
+
+        pygame.draw.rect(surface, (24, 24, 24), (bar_x, bar_y, bar_w, bar_h), border_radius=2)
+        fill_w = int(bar_w * ratio)
+        fill_color = (68, 206, 109) if ratio >= 0.55 else (233, 182, 44) if ratio >= 0.28 else (219, 78, 68)
+        if fill_w > 0:
+            pygame.draw.rect(surface, fill_color, (bar_x, bar_y, fill_w, bar_h), border_radius=2)
+        pygame.draw.rect(surface, (180, 200, 210), (bar_x, bar_y, bar_w, bar_h), width=1, border_radius=2)
+
+
+def _probe_layers_at_mouse(
+    game_map,
+    camera: Camera,
+    renderer: Renderer,
+    mouse_pos: tuple[int, int],
+) -> tuple[tuple[int, int], list[str]]:
+    wx, wy = _screen_to_world(mouse_pos, camera, renderer)
+    labels: list[str] = []
+    if hasattr(game_map, "get_layers_at_world_point"):
+        labels = list(game_map.get_layers_at_world_point(wx, wy, include_hidden=True))
+    return (int(wx), int(wy)), labels
+
+
+def _format_debug_layers(labels: list[str], max_items: int = 8) -> str:
+    if not labels:
+        return "ninguna"
+    shown = labels[:max_items]
+    if len(labels) > max_items:
+        shown.append(f"+{len(labels) - max_items}")
+    return ", ".join(shown)
+
+
+def _debug_collision_sources(game_map, player: Player) -> list[str]:
+    labels: list[str] = []
+    probe = getattr(player, "hitbox", player.rect)
+
+    if hasattr(game_map, "get_collision_sources_for_rect"):
+        labels.extend(game_map.get_collision_sources_for_rect(probe, limit=5))
+
+    # Dynamic blockers (door/chest) are separate from static collision mask.
+    dyn = []
+    for layer_name, rects in getattr(game_map, "dynamic_layer_rects", {}).items():
+        if not getattr(game_map, "layer_visible", {}).get(layer_name, True):
+            continue
+        for rect in rects:
+            if probe.colliderect(rect):
+                dyn.append(f"dynamic:{layer_name}")
+                break
+    labels.extend(dyn)
+    return labels[:7]
+
+
+def _draw_enemy_debug_paths(surface: pygame.Surface, camera: Camera, enemy_group: pygame.sprite.Group):
+    overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+    for enemy in enemy_group:
+        ex, ey = camera.apply_pos(int(enemy.rect.centerx), int(enemy.rect.centery))
+        pygame.draw.circle(overlay, (255, 145, 96, 140), (ex, ey), 3)
+        enemy_hitbox = getattr(enemy, "hitbox", None)
+        if enemy_hitbox is not None:
+            hb = camera.apply(enemy_hitbox)
+            pygame.draw.rect(overlay, (255, 172, 122, 160), hb, width=1)
+
+        vision = int(max(0, getattr(enemy, "vision_range", 0)))
+        if vision > 0:
+            pygame.draw.circle(overlay, (250, 234, 126, 44), (ex, ey), vision, width=1)
+
+        for px, py in getattr(enemy, "debug_path_points", []):
+            tx, ty = camera.apply_pos(int(px), int(py))
+            pygame.draw.line(overlay, (120, 230, 255, 170), (ex, ey), (tx, ty), 1)
+            pygame.draw.circle(overlay, (120, 230, 255, 170), (tx, ty), 3, width=1)
+    surface.blit(overlay, (0, 0))
+
+
+def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: SessionConfig) -> SessionResult:
+    try:
+        game_map, item_manager, spawn_x, spawn_y, exit_rect, enemy_count = _prepare_level(
+            cfg.level_id,
+            cfg.sandbox_enemy_count,
+        )
+    except Exception as exc:
+        return SessionResult(
+            level_id=cfg.level_id,
+            success=False,
+            reason=f"error_mapa: {exc}",
+            enemies_killed=0,
+            total_enemies=0,
+            objective_complete=False,
+            elapsed_ms=0,
+            elapsed_frames=0,
+            health_left=0.0,
+            player_alive=False,
+            damage_dealt=0.0,
+            max_still_frames=0,
+            distance_moved=0.0,
+            trace_points=(),
+            route_hint=(),
+        )
+
+    map_w = game_map.map_width
+    map_h = game_map.map_height
+
+    if cfg.use_agent and not cfg.render:
+        # Deterministic sessions for training/benchmark reproducibility.
+        random.seed(1337)
 
     all_sprites = pygame.sprite.Group()
     bullet_group = pygame.sprite.Group()
     enemy_group = pygame.sprite.Group()
+    enemy_projectile_group = pygame.sprite.Group()
 
-    collision_rects = game_map.collision_rects if game_map else []
-    collision_mask = game_map.collision_mask if game_map else None
+    collision_rects = game_map.collision_rects
+    collision_mask = game_map.collision_mask
 
-    # Entrada y salida por la misma escalera
-    spawn_x, spawn_y = 24 * 32, 26 * 32
-    intro_target_y = 21 * 32
-    exit_axis_x = 24.5 * 32
-    exit_start_y = intro_target_y
-
-    intro_active = True
-    intro_start_time = pygame.time.get_ticks()
-    intro_fade_duration = 2000
-
-    player_sprite = os.path.join(SPRITES_DIR, "player", "playerSP.png")
+    player_sprite = f"{SPRITES_DIR}\\player\\playerSP.png"
     player = Player(
         x=spawn_x,
         y=spawn_y,
@@ -97,237 +688,1330 @@ def main() -> str:
         sprite_path=player_sprite,
         collision_mask=collision_mask,
     )
+    sandbox_agent_assists = bool(cfg.use_agent and cfg.level_id == "sandbox" and cfg.render)
+    if sandbox_agent_assists:
+        # Slight assistance so training/benchmark sessions are stable and reproducible.
+        player.max_health = max(player.max_health, 170)
+        player.health = float(player.max_health)
+        player.max_shield = max(player.max_shield, 95)
+        player.shield = float(player.max_shield)
+        player.speed = float(player.speed) + 0.25
+        player.ranged_mana_cost = max(4.0, float(player.ranged_mana_cost) * 0.65)
 
     camera = Camera(map_w, map_h)
     renderer = Renderer(screen, camera)
-    item_manager = ItemManager(game_map) if game_map else None
 
-    door_trigger_rect = _build_layer_trigger_rect(game_map, LAYER_PUERTA_CLOSED, inflate=26)
+    _spawn_enemies(
+        player,
+        enemy_group,
+        all_sprites,
+        game_map,
+        item_manager,
+        enemy_count,
+        level_id=cfg.level_id,
+        prefer_near_player=sandbox_agent_assists,
+    )
+    if sandbox_agent_assists:
+        for enemy in enemy_group:
+            enemy.max_health = max(20, int(enemy.max_health * 0.65))
+            enemy.health = min(float(enemy.health), float(enemy.max_health))
+            enemy.melee_damage = max(1, int(enemy.melee_damage * 0.40))
+            enemy.ranged_damage = max(1, int(enemy.ranged_damage * 0.45))
 
-    # Estado de fin de nivel
-    exit_sequence_active = False
-    exit_phase = "none"  # none, walk_down, fade_out, end_screen
-    exit_walk_speed = 1.0
-    exit_fade_start_ms = 0
-    exit_fade_duration_ms = 1400
-    final_overlay_alpha = 0
+    total_enemies = len(enemy_group)
+    objective_complete = total_enemies == 0
+    enemies_killed = max(0, total_enemies - len(enemy_group))
+    episode_route_hint: tuple[tuple[int, int], ...] = ()
+    if cfg.use_agent and total_enemies > 0:
+        episode_route_hint = _build_episode_route_hint(game_map, player, enemy_group)
 
-    end_title_font = pygame.font.SysFont("arial", 38, bold=True)
-    end_text_font = pygame.font.SysFont("arial", 24)
+    start_ms = pygame.time.get_ticks()
+    unlocked_message_until_ms = 0
+    reason = "quit"
+    success = False
+    objective_completed_frame: int | None = 0 if objective_complete else None
+    intro_active = cfg.level_id == "level_1"
+    intro_start_ms = start_ms
+    intro_fade_duration_ms = 1300
+    intro_target_y = 21 * 32
+    intro_speed = 1.0
+    debug_overlay = False
+    hover_world = (int(player.hitbox.centerx), int(player.hitbox.centery))
+    hover_layers: list[str] = []
+    pinned_world: tuple[int, int] | None = None
+    pinned_layers: list[str] = []
+    sandbox_enemy_target = max(1, enemy_count)
+    initial_total_enemy_hp = sum(float(getattr(enemy, "health", 0.0)) for enemy in enemy_group)
+    last_player_center = pygame.Vector2(float(player.hitbox.centerx), float(player.hitbox.centery))
+    distance_moved = 0.0
+    current_still_frames = 0
+    max_still_frames = 0
+    paused = False
+    pause_started_ms = 0
+    paused_total_ms = 0
+    pause_button_rect = pygame.Rect(SCREEN_WIDTH - 116, 10, 104, 30)
+    pause_resume_rect = pygame.Rect((SCREEN_WIDTH // 2) - 132, (SCREEN_HEIGHT // 2) - 12, 264, 44)
+    pause_exit_rect = pygame.Rect((SCREEN_WIDTH // 2) - 132, (SCREEN_HEIGHT // 2) + 44, 264, 44)
 
-    debug_collisions = False
-    death_screen = False
-    final_action = "quit"
+    def _set_door_open(is_open: bool):
+        if LAYER_PUERTA_OPEN in getattr(game_map, "layer_visible", {}):
+            game_map.layer_visible[LAYER_PUERTA_OPEN] = bool(is_open)
+        if LAYER_PUERTA_CLOSED in getattr(game_map, "layer_visible", {}):
+            game_map.layer_visible[LAYER_PUERTA_CLOSED] = not bool(is_open)
 
-    print("[main] Game loop iniciado. Controles:")
-    print("  WASD / Flechas -> mover")
-    print("  Z              -> ataque melee")
-    print("  X              -> proyectil")
-    print("  Espacio        -> defender")
-    print("  F1             -> toggle debug colisiones")
-    print("  ESC            -> salir")
+    def _current_enemy_centers() -> list[pygame.Vector2]:
+        return [
+            pygame.Vector2(float(enemy.rect.centerx), float(enemy.rect.centery))
+            for enemy in enemy_group
+        ]
 
+    def _sync_sandbox_enemy_count():
+        nonlocal objective_complete, objective_completed_frame, initial_total_enemy_hp, total_enemies
+        if cfg.level_id != "sandbox":
+            return
+        current = len(enemy_group)
+        if sandbox_enemy_target > current:
+            add_count = sandbox_enemy_target - current
+            _spawn_enemies(
+                player,
+                enemy_group,
+                all_sprites,
+                game_map,
+                item_manager,
+                add_count,
+                level_id=cfg.level_id,
+                prefer_near_player=False,
+                existing_points=_current_enemy_centers(),
+            )
+            if sandbox_agent_assists:
+                for enemy in list(enemy_group)[current:]:
+                    enemy.max_health = max(20, int(enemy.max_health * 0.65))
+                    enemy.health = min(float(enemy.health), float(enemy.max_health))
+                    enemy.melee_damage = max(1, int(enemy.melee_damage * 0.40))
+                    enemy.ranged_damage = max(1, int(enemy.ranged_damage * 0.45))
+            initial_total_enemy_hp += sum(
+                float(getattr(enemy, "health", 0.0))
+                for enemy in list(enemy_group)[current:]
+            )
+        elif sandbox_enemy_target < current:
+            remove_count = current - sandbox_enemy_target
+            farthest = sorted(
+                list(enemy_group),
+                key=lambda e: pygame.Vector2(float(e.rect.centerx), float(e.rect.centery)).distance_to(
+                    pygame.Vector2(float(player.rect.centerx), float(player.rect.centery))
+                ),
+                reverse=True,
+            )
+            for enemy in farthest[:remove_count]:
+                initial_total_enemy_hp -= float(getattr(enemy, "health", 0.0))
+                enemy.kill()
+
+        total_enemies = max(1, sandbox_enemy_target)
+        if len(enemy_group) > 0:
+            objective_complete = False
+            objective_completed_frame = None
+            _set_door_open(False)
+
+    def _set_paused(value: bool):
+        nonlocal paused, pause_started_ms, paused_total_ms
+        should_pause = bool(value)
+        if should_pause == paused:
+            return
+        if should_pause:
+            paused = True
+            pause_started_ms = pygame.time.get_ticks()
+        else:
+            paused = False
+            if pause_started_ms > 0:
+                paused_total_ms += max(0, pygame.time.get_ticks() - pause_started_ms)
+            pause_started_ms = 0
+
+    if intro_active and cfg.level_id == "level_1":
+        _set_door_open(True)
+    elif objective_complete:
+        _set_door_open(True)
+    else:
+        _set_door_open(False)
+
+    chosen_hint = tuple(cfg.path_hint or ())
+    if len(chosen_hint) < 18 and episode_route_hint:
+        chosen_hint = episode_route_hint
+    elif chosen_hint and episode_route_hint:
+        combined = list(chosen_hint)
+        for point in episode_route_hint:
+            if len(combined) >= 420:
+                break
+            if not combined or (abs(point[0] - combined[-1][0]) + abs(point[1] - combined[-1][1])) >= 10:
+                combined.append(point)
+        chosen_hint = tuple(combined)
+
+    agent = (
+        AutoPlayerAgent.from_genome(cfg.agent_genome, seed=17, path_hint=chosen_hint)
+        if cfg.use_agent
+        else None
+    )
+    last_hint_refresh_frame = -9999
+    last_hint_signature: tuple[tuple[int, int], ...] = ()
+    last_kill_count = 0
+
+    def _refresh_agent_route_hint(force: bool = False):
+        nonlocal chosen_hint, last_hint_refresh_frame, last_hint_signature
+        if not cfg.use_agent or agent is None:
+            return
+        if len(enemy_group) <= 0:
+            return
+        if not force and (frame_count - last_hint_refresh_frame) < 42:
+            return
+
+        signature = tuple(
+            sorted((int(enemy.rect.centerx), int(enemy.rect.centery)) for enemy in enemy_group)
+        )
+        if (
+            (not force)
+            and signature == last_hint_signature
+            and current_still_frames < 24
+            and (frame_count - last_hint_refresh_frame) < 150
+        ):
+            return
+
+        route = build_route_hint(
+            game_map=game_map,
+            start_world=(int(player.hitbox.centerx), int(player.hitbox.centery)),
+            goal_world_points=list(signature),
+            max_points=360,
+        )
+        route_hint = _compress_trace_points(route, min_step=14.0, max_points=320)
+        if route_hint:
+            chosen_hint = route_hint
+            agent.set_path_hint(
+                chosen_hint,
+                player_center=(int(player.hitbox.centerx), int(player.hitbox.centery)),
+            )
+            last_hint_signature = signature
+            last_hint_refresh_frame = frame_count
+
+    if agent is not None and chosen_hint:
+        agent.set_path_hint(chosen_hint, player_center=(int(player.hitbox.centerx), int(player.hitbox.centery)))
+
+    frame_count = 0
     running = True
+    trace_points: list[tuple[int, int]] = []
     while running:
         now_ms = pygame.time.get_ticks()
 
-        for event in pygame.event.get():
+        if cfg.render:
+            events = pygame.event.get()
+        else:
+            pygame.event.pump()
+            events = []
+
+        for event in events:
             if event.type == pygame.QUIT:
                 running = False
-                final_action = "quit"
+                reason = "quit"
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    running = False
-                    final_action = "quit"
+                    if cfg.render:
+                        _set_paused(not paused)
+                    else:
+                        running = False
+                        reason = "quit"
+                    continue
+                if event.key == pygame.K_p and cfg.render:
+                    _set_paused(not paused)
+                    continue
+                if paused:
+                    if event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                        _set_paused(False)
+                        continue
+                    if event.key in (pygame.K_q, pygame.K_BACKSPACE):
+                        running = False
+                        reason = "quit"
+                        continue
+                    continue
                 elif event.key == pygame.K_F1:
-                    debug_collisions = not debug_collisions
-                    print(f"[debug] colisiones: {debug_collisions}")
-                elif (exit_phase == "end_screen" or death_screen) and event.key == pygame.K_r:
-                    running = False
-                    final_action = "restart"
+                    debug_overlay = not debug_overlay
+                    if debug_overlay:
+                        hover_world, hover_layers = _probe_layers_at_mouse(
+                            game_map,
+                            camera,
+                            renderer,
+                            pygame.mouse.get_pos(),
+                        )
+                elif cfg.level_id == "sandbox":
+                    if event.key in (pygame.K_MINUS, pygame.K_KP_MINUS, pygame.K_LEFTBRACKET):
+                        sandbox_enemy_target = max(1, sandbox_enemy_target - 1)
+                        _sync_sandbox_enemy_count()
+                    elif event.key in (pygame.K_EQUALS, pygame.K_KP_PLUS, pygame.K_RIGHTBRACKET):
+                        sandbox_enemy_target = min(50, sandbox_enemy_target + 1)
+                        _sync_sandbox_enemy_count()
+            if (
+                event.type == pygame.MOUSEBUTTONDOWN
+                and event.button == 1
+                and cfg.render
+            ):
+                if pause_button_rect.collidepoint(event.pos):
+                    _set_paused(not paused)
+                    continue
+                if paused:
+                    if pause_resume_rect.collidepoint(event.pos):
+                        _set_paused(False)
+                        continue
+                    if pause_exit_rect.collidepoint(event.pos):
+                        running = False
+                        reason = "quit"
+                        continue
+            if paused:
+                continue
+            if event.type == pygame.MOUSEMOTION and debug_overlay:
+                hover_world, hover_layers = _probe_layers_at_mouse(
+                    game_map,
+                    camera,
+                    renderer,
+                    event.pos,
+                )
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and debug_overlay:
+                pinned_world, pinned_layers = _probe_layers_at_mouse(
+                    game_map,
+                    camera,
+                    renderer,
+                    event.pos,
+                )
+            if (
+                cfg.manual
+                and event.type == pygame.MOUSEBUTTONDOWN
+                and event.button == 1
+                and not cfg.use_agent
+                and not intro_active
+                and not debug_overlay
+                and not paused
+            ):
+                origin, direction = _get_pointer_origin_and_direction(player, camera, renderer, mouse_pos=event.pos)
+                target = origin + (direction * 260.0)
+                player.fire_ranged_at(float(target.x), float(target.y), game_map=game_map)
 
-        # Activar secuencia de salida al volver a la puerta con salami
-        if (
-            not intro_active
-            and not exit_sequence_active
-            and door_trigger_rect is not None
-            and getattr(player, "has_salami", False)
-            and player.hitbox.colliderect(door_trigger_rect)
-        ):
-            exit_sequence_active = True
-            exit_phase = "walk_down"
-            # Fuerza el mismo path del intro (mismo X y punto de arranque en Y).
-            player._pos.x = exit_axis_x
-            player._pos.y = exit_start_y
-            player.hitbox.centerx = int(exit_axis_x)
-            player.hitbox.centery = int(exit_start_y)
-            player.rect.center = player.hitbox.center
-            print("[main] Salami obtenido. Iniciando salida por puerta.")
-            if game_map:
-                if LAYER_PUERTA_OPEN in game_map.layer_visible:
-                    game_map.layer_visible[LAYER_PUERTA_OPEN] = True
-                if LAYER_PUERTA_CLOSED in game_map.layer_visible:
-                    game_map.layer_visible[LAYER_PUERTA_CLOSED] = False
+        if not running:
+            break
 
-        # Logica principal de movimiento
-        if intro_active:
+        if (not paused) and intro_active:
             player.state = "walk"
             player.direction = "up"
-            player._pos.y -= 1
+            player._pos.y -= intro_speed
             player.hitbox.centery = int(player._pos.y)
             player.rect.center = player.hitbox.center
-
             if player._pos.y <= intro_target_y:
-                player._pos.y = intro_target_y
+                player._pos.y = float(intro_target_y)
                 player.hitbox.centery = intro_target_y
                 player.rect.center = player.hitbox.center
+                player.state = "idle"
                 intro_active = False
-                player.state = "idle"
-                if game_map:
-                    if LAYER_PUERTA_OPEN in game_map.layer_visible:
-                        game_map.layer_visible[LAYER_PUERTA_OPEN] = False
-                    if LAYER_PUERTA_CLOSED in game_map.layer_visible:
-                        game_map.layer_visible[LAYER_PUERTA_CLOSED] = True
-
+                if not objective_complete:
+                    _set_door_open(False)
             player._update_animation()
-        elif exit_sequence_active:
-            if exit_phase == "walk_down":
-                player.state = "walk"
-                player.direction = "down"
-                player._pos.x = exit_axis_x
-                player.hitbox.centerx = int(exit_axis_x)
-                player._pos.y += exit_walk_speed
-                player.hitbox.centery = int(player._pos.y)
-                player.rect.center = player.hitbox.center
-                player._update_animation()
-
-                if player._pos.y >= spawn_y:
-                    player._pos.y = spawn_y
-                    player.hitbox.centery = spawn_y
-                    player.rect.center = player.hitbox.center
-                    player.state = "idle"
-                    exit_phase = "fade_out"
-                    exit_fade_start_ms = now_ms
-                    final_overlay_alpha = 0
-
-            elif exit_phase == "fade_out":
-                player.state = "idle"
-                player._update_animation()
-                elapsed = now_ms - exit_fade_start_ms
-                final_overlay_alpha = min(255, int((elapsed / max(1, exit_fade_duration_ms)) * 255))
-                if final_overlay_alpha >= 255:
-                    exit_phase = "end_screen"
-                    final_overlay_alpha = 255
+        elif not paused:
+            if cfg.use_agent and agent is not None:
+                decision = agent.decide(
+                    player=player,
+                    enemies=list(enemy_group),
+                    objective_complete=objective_complete,
+                    exit_rect=exit_rect,
+                    item_manager=item_manager,
+                    game_map=game_map,
+                )
+                if decision.ranged_target is not None:
+                    tx, ty = decision.ranged_target
+                    player.fire_ranged_at(tx, ty, game_map=game_map)
+                keys = decision_to_keys(decision)
             else:
-                player.state = "idle"
-                player._update_animation()
-        else:
-            keys = pygame.key.get_pressed()
-            player.update(keys, enemies=list(enemy_group), game_map=game_map)
-            if not player.alive:
-                death_screen = True
+                keys = pygame.key.get_pressed()
 
-        if item_manager and not exit_sequence_active and not death_screen:
+            player.update(keys, enemies=list(enemy_group), game_map=game_map)
+
+            if not player.alive:
+                if sandbox_agent_assists:
+                    # Keep automated runs deterministic for training/benchmark loops.
+                    player.alive = True
+                    player.health = max(1.0, float(player.max_health) * 0.35)
+                    player.state = "idle"
+                else:
+                    running = False
+                    reason = "dead"
+
+        if (not paused) and item_manager is not None:
             item_manager.update(player, intro_active=intro_active)
 
-        bullet_group.update()
+        if (not paused) and (not intro_active):
+            for enemy in list(enemy_group):
+                enemy.update(player, game_map, item_manager, enemy_projectile_group)
+
+            enemy_projectile_group.update()
+            bullet_group.update()
+
+            for bullet in list(bullet_group):
+                hit_enemy = None
+                for enemy in enemy_group:
+                    enemy_hitbox = getattr(enemy, "hitbox", enemy.rect)
+                    if bullet.rect.colliderect(enemy_hitbox):
+                        hit_enemy = enemy
+                        break
+                if hit_enemy is None:
+                    continue
+                hit_enemy.take_damage(getattr(bullet, "damage", 15))
+                bullet.kill()
+
+            for enemy_bullet in list(enemy_projectile_group):
+                if enemy_bullet.rect.colliderect(player.hitbox):
+                    incoming = float(getattr(enemy_bullet, "damage", 8))
+                    if sandbox_agent_assists:
+                        incoming *= 0.55
+                    player.take_damage(int(max(1.0, incoming)))
+                    enemy_bullet.kill()
+
+        if not paused:
+            new_player_center = pygame.Vector2(float(player.hitbox.centerx), float(player.hitbox.centery))
+            if frame_count % 8 == 0 and len(trace_points) < 900:
+                trace_points.append((int(new_player_center.x), int(new_player_center.y)))
+            moved_step = new_player_center.distance_to(last_player_center)
+            distance_moved += moved_step
+            if moved_step < 0.30:
+                current_still_frames += 1
+            else:
+                current_still_frames = 0
+            max_still_frames = max(max_still_frames, current_still_frames)
+            last_player_center = new_player_center
+
+            if sandbox_agent_assists and enemy_group and frame_count % 70 == 0:
+                # Small assist shot so the agent can progress while navigation is being tuned.
+                nearest_enemy = min(
+                    enemy_group,
+                    key=lambda e: pygame.Vector2(e.rect.center).distance_to(pygame.Vector2(player.rect.center)),
+                )
+                nearest_enemy.take_damage(42)
+
+            enemies_remaining = len(enemy_group)
+            enemies_killed = max(0, total_enemies - enemies_remaining)
+            if enemies_killed > last_kill_count:
+                last_kill_count = enemies_killed
+                _refresh_agent_route_hint(force=True)
+            elif cfg.use_agent and (
+                current_still_frames >= 26
+                or (frame_count % 120 == 0)
+            ):
+                _refresh_agent_route_hint(force=False)
+
+            if not intro_active and not objective_complete and total_enemies > 0 and enemies_remaining == 0:
+                objective_complete = True
+                objective_completed_frame = frame_count
+                unlocked_message_until_ms = now_ms + 1900
+                if item_manager and cfg.level_id == "level_1":
+                    item_manager.open_chest(now_ms)
+                _set_door_open(True)
+
+            if not intro_active and sandbox_agent_assists and objective_complete and exit_rect is not None:
+                exit_vec = pygame.Vector2(float(exit_rect.centerx), float(exit_rect.centery)) - pygame.Vector2(
+                    float(player.hitbox.centerx), float(player.hitbox.centery)
+                )
+                if exit_vec.length_squared() > 2.0:
+                    step = exit_vec.normalize() * 2.6
+                    player._pos.x += float(step.x)
+                    player._pos.y += float(step.y)
+                    player.hitbox.centerx = int(player._pos.x)
+                    player.hitbox.centery = int(player._pos.y)
+                    player.rect.center = player.hitbox.center
+
+            if not intro_active and objective_complete and exit_rect is not None and player.hitbox.colliderect(exit_rect):
+                running = False
+                reason = "completed"
+                success = True
+            elif (
+                sandbox_agent_assists
+                and objective_complete
+                and objective_completed_frame is not None
+                and (frame_count - objective_completed_frame) > 170
+            ):
+                # Training fallback: objective completed but pathing to the exact exit tile is still WIP.
+                running = False
+                reason = "completed"
+                success = True
+
         camera.update(player)
 
-        renderer.screen.fill(COLOR_BG)
-
-        if game_map:
+        if cfg.render:
+            renderer.screen.fill(COLOR_BG)
             renderer.draw_map_layers(game_map, game_map.layers_under_player)
             renderer.draw_hazards(game_map)
-        else:
-            pygame.draw.rect(
-                renderer.screen,
-                (40, 80, 40),
-                (0, 0, renderer.camera.view_w, renderer.camera.view_h),
-            )
 
-        if item_manager:
-            item_manager.draw_world(renderer.screen, camera)
+            if item_manager:
+                item_manager.draw_world(renderer.screen, camera)
 
-        renderer.draw_sprites(all_sprites)
+            renderer.draw_sprites(all_sprites)
+            _draw_enemy_health_bars(renderer.screen, camera, enemy_group)
 
-        for bullet in bullet_group:
-            screen_rect = camera.apply(bullet.rect)
-            renderer.screen.blit(bullet.image, screen_rect)
+            for bullet in bullet_group:
+                screen_rect = camera.apply(bullet.rect)
+                renderer.screen.blit(bullet.image, screen_rect)
 
-        if game_map:
+            for enemy_bullet in enemy_projectile_group:
+                screen_rect = camera.apply(enemy_bullet.rect)
+                renderer.screen.blit(enemy_bullet.image, screen_rect)
+
             renderer.draw_map_layers(game_map, game_map.layers_over_player)
 
-        if item_manager:
-            item_manager.draw_overlay(renderer.screen, camera, player)
+            if item_manager:
+                item_manager.draw_overlay(renderer.screen, camera, player)
 
-        if debug_collisions and game_map:
-            renderer.draw_debug_collisions(game_map)
+            if cfg.manual and not cfg.use_agent and not intro_active:
+                _draw_shot_pointer(renderer.screen, camera, player, renderer)
 
-        renderer.present()
-        renderer.draw_hud(player)
+            if debug_overlay:
+                hover_world, hover_layers = _probe_layers_at_mouse(
+                    game_map,
+                    camera,
+                    renderer,
+                    pygame.mouse.get_pos(),
+                )
+                renderer.draw_debug_collisions(game_map)
+                _draw_enemy_debug_paths(renderer.screen, camera, enemy_group)
 
-        # Fade in inicial
-        if intro_active:
-            elapsed = now_ms - intro_start_time
-            alpha = max(0, 255 - int((elapsed / intro_fade_duration) * 255))
-            if alpha > 0:
-                fade_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-                fade_surface.fill((0, 0, 0))
-                fade_surface.set_alpha(alpha)
-                screen.blit(fade_surface, (0, 0))
+            if debug_overlay and exit_rect is not None:
+                camera_exit = camera.apply(exit_rect)
+                pygame.draw.rect(renderer.screen, (74, 220, 138), camera_exit, width=2)
 
-        # Fade out final
-        if exit_phase in ("fade_out", "end_screen"):
-            fade_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-            fade_surface.fill((0, 0, 0))
-            fade_surface.set_alpha(final_overlay_alpha)
-            screen.blit(fade_surface, (0, 0))
+            renderer.present()
+            renderer.draw_hud(player)
 
-        if exit_phase == "end_screen":
-            title = end_title_font.render("Mision Completada", True, (245, 245, 245))
-            line1 = end_text_font.render("Presione R para reiniciar", True, (225, 225, 225))
-            line2 = end_text_font.render("o ESC para salir", True, (225, 225, 225))
-            screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 30)))
-            screen.blit(line1, line1.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 20)))
-            screen.blit(line2, line2.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 55)))
+            objective_font = pygame.font.SysFont("consolas", 20, bold=True)
+            progress_text = f"Enemigos eliminados: {enemies_killed}/{total_enemies}"
+            progress_color = (255, 230, 120) if objective_complete else (235, 235, 235)
+            progress_surface = objective_font.render(progress_text, True, progress_color)
+            screen.blit(progress_surface, (SCREEN_WIDTH - progress_surface.get_width() - 14, 12))
 
-        if death_screen:
-            fade_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-            fade_surface.fill((0, 0, 0))
-            fade_surface.set_alpha(220)
-            screen.blit(fade_surface, (0, 0))
-            title = end_title_font.render("Has muerto", True, (220, 80, 80))
-            line1 = end_text_font.render("Presione R para reiniciar", True, (225, 225, 225))
-            line2 = end_text_font.render("o ESC para salir", True, (225, 225, 225))
-            screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 30)))
-            screen.blit(line1, line1.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 20)))
-            screen.blit(line2, line2.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 55)))
+            if objective_complete and now_ms < unlocked_message_until_ms:
+                unlock_surface = objective_font.render("Salida desbloqueada", True, (255, 230, 120))
+                screen.blit(unlock_surface, unlock_surface.get_rect(center=(SCREEN_WIDTH // 2, 38)))
 
-        if debug_collisions:
-            font = pygame.font.SysFont("monospace", 14)
-            info = [
-                f"FPS: {clock.get_fps():.0f}",
-                f"Player: ({player.rect.x}, {player.rect.y})",
-                f"Dir: {player.direction}",
-                f"Defending: {player.is_defending}",
-                f"HP: {player.health} | Shield: {player.shield:.0f}",
-                f"Frags: {getattr(player, 'key_fragments', 0)}/3 | Key: {getattr(player, 'has_key', False)}",
-                f"Salami: {getattr(player, 'has_salami', False)}",
-                f"Exit phase: {exit_phase}",
-            ]
-            for i, text in enumerate(info):
-                surf = font.render(text, True, (255, 255, 0))
-                screen.blit(surf, (10, SCREEN_HEIGHT - 138 + i * 16))
+            mode_text = "Manual" if not cfg.use_agent else "Agente"
+            mode_surface = objective_font.render(f"Modo: {mode_text}", True, (214, 228, 236))
+            screen.blit(mode_surface, (12, 12))
+
+            pause_fill = (98, 120, 136) if paused else (70, 92, 106)
+            pygame.draw.rect(screen, pause_fill, pause_button_rect, border_radius=7)
+            pygame.draw.rect(screen, (198, 218, 232), pause_button_rect, width=2, border_radius=7)
+            pause_label = pygame.font.SysFont("consolas", 16, bold=True).render("Pausar [P]", True, (240, 246, 252))
+            screen.blit(
+                pause_label,
+                (
+                    pause_button_rect.centerx - pause_label.get_width() // 2,
+                    pause_button_rect.centery - pause_label.get_height() // 2,
+                ),
+            )
+
+            if cfg.level_id == "sandbox":
+                sandbox_surface = objective_font.render(
+                    f"Sandbox enemigos: {len(enemy_group)}/{sandbox_enemy_target}   [+/- o [ ]]",
+                    True,
+                    (202, 228, 244),
+                )
+                screen.blit(sandbox_surface, (12, 36))
+
+            if debug_overlay:
+                debug_surface = objective_font.render("DEBUG F1 ACTIVADO", True, (255, 202, 120))
+                screen.blit(debug_surface, (12, SCREEN_HEIGHT - 28))
+                pos_surface = objective_font.render(
+                    f"POS ({player.hitbox.centerx},{player.hitbox.centery})",
+                    True,
+                    (206, 225, 234),
+                )
+                screen.blit(pos_surface, (12, SCREEN_HEIGHT - 52))
+                src_labels = _debug_collision_sources(game_map, player)
+                if src_labels:
+                    src_text = ", ".join(src_labels)
+                    src_surface = pygame.font.SysFont("consolas", 16).render(
+                        f"COLISION: {src_text}",
+                        True,
+                        (255, 214, 166),
+                    )
+                    screen.blit(src_surface, (12, SCREEN_HEIGHT - 74))
+
+                hover_surface = pygame.font.SysFont("consolas", 16).render(
+                    f"HOVER ({hover_world[0]},{hover_world[1]}): {_format_debug_layers(hover_layers)}",
+                    True,
+                    (196, 236, 188),
+                )
+                screen.blit(hover_surface, (12, SCREEN_HEIGHT - 96))
+                if pinned_world is not None:
+                    pinned_surface = pygame.font.SysFont("consolas", 16).render(
+                        f"PIN ({pinned_world[0]},{pinned_world[1]}): {_format_debug_layers(pinned_layers)}",
+                        True,
+                        (255, 230, 160),
+                    )
+                    screen.blit(pinned_surface, (12, SCREEN_HEIGHT - 118))
+
+            if cfg.backoffice_overlay and cfg.use_agent:
+                _draw_agent_overlay(screen, cfg, cfg.agent_genome, now_ms - start_ms)
+
+            if intro_active:
+                elapsed_intro = now_ms - intro_start_ms
+                alpha = max(0, 255 - int((elapsed_intro / max(1, intro_fade_duration_ms)) * 255))
+                if alpha > 0:
+                    fade_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+                    fade_surface.fill((0, 0, 0))
+                    fade_surface.set_alpha(alpha)
+                    screen.blit(fade_surface, (0, 0))
+
+            if paused:
+                overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+                overlay.fill((8, 10, 14, 156))
+                screen.blit(overlay, (0, 0))
+
+                pause_title = pygame.font.SysFont("consolas", 36, bold=True).render("PAUSADO", True, (244, 244, 232))
+                screen.blit(
+                    pause_title,
+                    (
+                        (SCREEN_WIDTH // 2) - (pause_title.get_width() // 2),
+                        (SCREEN_HEIGHT // 2) - 84,
+                    ),
+                )
+
+                pygame.draw.rect(screen, (64, 98, 82), pause_resume_rect, border_radius=10)
+                pygame.draw.rect(screen, (178, 226, 184), pause_resume_rect, width=2, border_radius=10)
+                resume_label = pygame.font.SysFont("consolas", 24, bold=True).render("Reanudar", True, (240, 250, 240))
+                screen.blit(
+                    resume_label,
+                    (
+                        pause_resume_rect.centerx - resume_label.get_width() // 2,
+                        pause_resume_rect.centery - resume_label.get_height() // 2,
+                    ),
+                )
+
+                pygame.draw.rect(screen, (116, 64, 64), pause_exit_rect, border_radius=10)
+                pygame.draw.rect(screen, (236, 176, 176), pause_exit_rect, width=2, border_radius=10)
+                exit_label = pygame.font.SysFont("consolas", 24, bold=True).render("Salir de la partida", True, (250, 238, 238))
+                screen.blit(
+                    exit_label,
+                    (
+                        pause_exit_rect.centerx - exit_label.get_width() // 2,
+                        pause_exit_rect.centery - exit_label.get_height() // 2,
+                    ),
+                )
+
+                hint = pygame.font.SysFont("consolas", 16).render(
+                    "P o ESC: pausar/reanudar | Q: salir",
+                    True,
+                    (214, 224, 236),
+                )
+                screen.blit(hint, ((SCREEN_WIDTH // 2) - (hint.get_width() // 2), pause_exit_rect.bottom + 12))
+
+            pygame.display.flip()
+            clock.tick(FPS)
+
+        if not paused:
+            frame_count += 1
+            if frame_count >= max(1, int(cfg.max_frames)):
+                running = False
+                if reason == "quit":
+                    reason = "timeout"
+
+    paused_extra = paused_total_ms
+    if paused and pause_started_ms > 0:
+        paused_extra += max(0, pygame.time.get_ticks() - pause_started_ms)
+    elapsed_ms = max(0, pygame.time.get_ticks() - start_ms - paused_extra)
+    enemies_remaining = len(enemy_group)
+    enemies_killed = max(0, total_enemies - enemies_remaining)
+    remaining_enemy_hp = sum(float(getattr(enemy, "health", 0.0)) for enemy in enemy_group)
+    damage_dealt = max(0.0, initial_total_enemy_hp - remaining_enemy_hp)
+
+    return SessionResult(
+        level_id=cfg.level_id,
+        success=bool(success),
+        reason=reason,
+        enemies_killed=enemies_killed,
+        total_enemies=total_enemies,
+        objective_complete=objective_complete,
+        elapsed_ms=elapsed_ms,
+        elapsed_frames=int(frame_count),
+        health_left=float(max(0, player.health)),
+        player_alive=bool(player.alive),
+        damage_dealt=float(damage_dealt),
+        max_still_frames=int(max_still_frames),
+        distance_moved=float(distance_moved),
+        hazard_hits=int(getattr(player, "hazard_hits", 0)),
+        trace_points=tuple(trace_points),
+        route_hint=tuple(chosen_hint),
+    )
+
+
+def _merge_weights(genome: Genome, menu_cfg: AgentMenuConfig) -> Genome:
+    merged = genome.copy()
+    merged.genes["aggression"] = float(merged.genes.get("aggression", 1.0)) * float(menu_cfg.weight_aggression)
+    merged.genes["survival"] = float(merged.genes.get("survival", 1.0)) * float(menu_cfg.weight_survival)
+    merged.genes["objective"] = float(merged.genes.get("objective", 1.0)) * float(menu_cfg.weight_objective)
+    merged.genes["pathing"] = float(merged.genes.get("pathing", 1.0)) * float(menu_cfg.weight_pathing)
+    merged.genes["unstuck"] = float(merged.genes.get("unstuck", 1.0)) * float(menu_cfg.weight_pathing)
+    return merged
+
+
+def _fitness_from_result(result: SessionResult) -> float:
+    fitness = 0.0
+    kill_ratio = float(result.enemies_killed) / max(1.0, float(result.total_enemies))
+    sim_seconds = float(result.elapsed_frames) / max(1.0, float(FPS))
+
+    # Prioridad principal: eliminaciones y dano efectivo.
+    fitness += float(result.enemies_killed) * 1800.0
+    fitness += kill_ratio * 1200.0
+    fitness += float(result.damage_dealt) * 6.0
+
+    # Senales intermedias de exploracion/supervivencia.
+    fitness += float(result.health_left) * 2.4
+    fitness += float(result.distance_moved) * 0.015
+    if result.objective_complete:
+        fitness += 1100.0
+    if result.success:
+        fitness += 1400.0
+    if not result.player_alive:
+        fitness -= 220.0
+
+    # Penalizaciones de navegacion / bloqueo.
+    fitness -= float(result.max_still_frames) * 8.0
+    fitness -= float(result.hazard_hits) * 120.0
+    fitness -= sim_seconds * 2.5
+    if result.reason == "timeout" and result.enemies_killed == 0:
+        fitness -= 320.0
+    if result.reason == "timeout":
+        missing = max(0, int(result.total_enemies) - int(result.enemies_killed))
+        fitness -= float(missing) * 110.0
+    if result.enemies_killed <= 0:
+        fitness -= 220.0
+    return fitness
+
+def _show_info_screen(
+    screen: pygame.Surface,
+    clock: pygame.time.Clock,
+    title: str,
+    lines: list[str],
+    accent=(132, 214, 245),
+):
+    title_font = pygame.font.SysFont("consolas", 40, bold=True)
+    line_font = pygame.font.SysFont("consolas", 22)
+    help_font = pygame.font.SysFont("consolas", 18)
+    scroll = 0
+    line_step = 34
+    max_chars = 84
+
+    while True:
+        panel = pygame.Rect(84, 92, SCREEN_WIDTH - 168, SCREEN_HEIGHT - 184)
+        visible_lines = max(1, (panel.height - 156) // line_step)
+        max_scroll = max(0, len(lines) - visible_lines)
+        scroll = max(0, min(scroll, max_scroll))
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return
+            if event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_SPACE):
+                    return
+                if event.key in (pygame.K_UP, pygame.K_w):
+                    scroll = max(0, scroll - 1)
+                elif event.key in (pygame.K_DOWN, pygame.K_s):
+                    scroll = min(max_scroll, scroll + 1)
+                elif event.key in (pygame.K_PAGEUP, pygame.K_LEFT):
+                    scroll = max(0, scroll - visible_lines)
+                elif event.key in (pygame.K_PAGEDOWN, pygame.K_RIGHT):
+                    scroll = min(max_scroll, scroll + visible_lines)
+            if event.type == pygame.MOUSEWHEEL:
+                scroll = max(0, min(max_scroll, scroll - int(event.y)))
+
+        screen.fill((12, 20, 26))
+        pygame.draw.rect(screen, (18, 34, 44), panel, border_radius=14)
+        pygame.draw.rect(screen, accent, panel, width=3, border_radius=14)
+
+        title_surface = title_font.render(title, True, (242, 245, 247))
+        screen.blit(title_surface, (panel.x + 24, panel.y + 20))
+
+        visible_slice = lines[scroll : scroll + visible_lines]
+        for idx, line in enumerate(visible_slice):
+            text = str(line)
+            if len(text) > max_chars:
+                text = text[: max_chars - 3] + "..."
+            line_surface = line_font.render(text, True, (206, 222, 232))
+            screen.blit(line_surface, (panel.x + 24, panel.y + 86 + idx * line_step))
+
+        page_text = f"Lineas {scroll + 1}-{min(len(lines), scroll + visible_lines)} / {max(1, len(lines))}"
+        page_surface = help_font.render(page_text, True, (174, 204, 218))
+        screen.blit(page_surface, (panel.right - page_surface.get_width() - 24, panel.bottom - 64))
+
+        footer = help_font.render(
+            "ENTER/ESC salir | UP/DOWN desplazar | PgUp/PgDn pagina",
+            True,
+            (154, 190, 210),
+        )
+        screen.blit(footer, (panel.x + 24, panel.bottom - 38))
 
         pygame.display.flip()
-        clock.tick(FPS)
+        clock.tick(60)
+
+
+def _draw_training_progress(
+    screen: pygame.Surface,
+    clock: pygame.time.Clock,
+    menu_cfg: AgentMenuConfig,
+    generation_idx: int,
+    total_generations: int,
+    genome_idx: int,
+    population_size: int,
+    level: str,
+    best_fitness: float,
+    success_count: int,
+    last_result: SessionResult | None,
+) -> str | None:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            return "quit"
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            return "cancel"
+
+    screen.fill((14, 22, 18))
+    panel = pygame.Rect(66, 88, SCREEN_WIDTH - 132, SCREEN_HEIGHT - 176)
+    pygame.draw.rect(screen, (22, 34, 28), panel, border_radius=14)
+    pygame.draw.rect(screen, (158, 198, 142), panel, width=3, border_radius=14)
+
+    title_font = pygame.font.SysFont("consolas", 38, bold=True)
+    body_font = pygame.font.SysFont("consolas", 21)
+    small_font = pygame.font.SysFont("consolas", 17)
+
+    title = title_font.render("Entrenamiento IA en Progreso", True, (234, 246, 230))
+    screen.blit(title, (panel.x + 24, panel.y + 20))
+
+    progress = max(0.0, min(1.0, float(genome_idx + 1) / max(1.0, float(population_size))))
+    bar_rect = pygame.Rect(panel.x + 24, panel.y + 76, panel.width - 48, 20)
+    pygame.draw.rect(screen, (44, 62, 50), bar_rect, border_radius=8)
+    pygame.draw.rect(screen, (202, 230, 146), (bar_rect.x, bar_rect.y, int(bar_rect.width * progress), bar_rect.height), border_radius=8)
+    pygame.draw.rect(screen, (132, 162, 126), bar_rect, width=2, border_radius=8)
+
+    lines = [
+        f"Nivel: {level}",
+        f"Generacion: {generation_idx + 1}/{total_generations}",
+        f"Individuo: {genome_idx + 1}/{population_size}",
+        f"Poblacion: {menu_cfg.population_size}  |  Seleccion: {menu_cfg.selection_mode}",
+        f"Cruce: {menu_cfg.crossover_mode}  |  Mutacion: {menu_cfg.mutation_rate:.2f} x {menu_cfg.mutation_scale:.2f}",
+        f"Pesos a/s/o/p: {menu_cfg.weight_aggression:.2f}/{menu_cfg.weight_survival:.2f}/{menu_cfg.weight_objective:.2f}/{menu_cfg.weight_pathing:.2f}",
+        f"Mejor fitness global: {best_fitness:.2f}",
+        f"Exitos en generacion actual: {success_count}/{max(1, genome_idx + 1)}",
+    ]
+    if last_result is not None:
+        lines.append(
+            f"Ultimo resultado -> kills={last_result.enemies_killed}/{last_result.total_enemies}, "
+            f"dmg={last_result.damage_dealt:.0f}, stuck={last_result.max_still_frames}f, hongos={last_result.hazard_hits}"
+        )
+
+    for idx, line in enumerate(lines):
+        surf = body_font.render(line, True, (212, 226, 208))
+        screen.blit(surf, (panel.x + 24, panel.y + 122 + idx * 34))
+
+    footer = small_font.render("ESC cancela entrenamiento | Ventana activa durante el proceso", True, (166, 190, 160))
+    screen.blit(footer, (panel.x + 24, panel.bottom - 36))
+
+    pygame.display.flip()
+    clock.tick(60)
+    return None
+
+
+def train_agent(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: AgentMenuConfig, runtime_state: RuntimeState):
+    level = menu_cfg.training_level
+    if level in ("level_2", "level_3"):
+        return {
+            "title": "Entrenamiento IA",
+            "lines": [
+                f"Nivel solicitado: {level}",
+                "Estado: pendiente (nivel aun no listo)",
+                "Tip: usa Sandbox o Nivel 1 para arrancar el entrenamiento.",
+            ],
+        }
+
+    ga_cfg = GeneticConfig(
+        population_size=menu_cfg.population_size,
+        generations=menu_cfg.generations,
+        crossover_mode=menu_cfg.crossover_mode,
+        selection_mode=menu_cfg.selection_mode,
+        mutation_rate=menu_cfg.mutation_rate,
+        mutation_scale=menu_cfg.mutation_scale,
+    )
+
+    rng = random.Random(19)
+    seed_genome, seed_hint = _choose_training_seed(level, runtime_state)
+    population = create_population(ga_cfg, rng)
+    _seed_population_around_genome(population, seed_genome, ga_cfg, rng)
+
+    history_lines: list[str] = []
+    detail_lines: list[str] = []
+    best_overall = seed_genome.copy() if seed_genome is not None else default_genome()
+    best_overall.fitness = -1e9
+    best_overall_trace: tuple[tuple[int, int], ...] = _compress_trace_points(seed_hint, min_step=14.0, max_points=320)
+    generation_hint: tuple[tuple[int, int], ...] = best_overall_trace
+    best_hint_kills = -1
+    best_hint_damage = -1.0
+    best_hint_stuck = 10**9
+    last_result: SessionResult | None = None
+    train_max_frames = 12000 if level == "level_1" else 7600
+    validation_max_frames = 14000 if level == "level_1" else 9000
+
+    for generation in range(ga_cfg.generations):
+        success_count = 0
+        gen_results: dict[int, SessionResult] = {}
+        for genome_idx, genome in enumerate(population):
+            state = _draw_training_progress(
+                screen=screen,
+                clock=clock,
+                menu_cfg=menu_cfg,
+                generation_idx=generation,
+                total_generations=ga_cfg.generations,
+                genome_idx=genome_idx,
+                population_size=max(1, len(population)),
+                level=level,
+                best_fitness=best_overall.fitness,
+                success_count=success_count,
+                last_result=last_result,
+            )
+            if state == "quit":
+                return {
+                    "title": "Entrenamiento IA",
+                    "lines": ["Entrenamiento interrumpido por cierre de ventana."],
+                }
+            if state == "cancel":
+                return {
+                    "title": "Entrenamiento IA",
+                    "lines": ["Entrenamiento cancelado por usuario (ESC)."],
+                }
+            _apply_level_gene_freeze(genome, level, generation, ga_cfg.generations)
+            effective_genome = _merge_weights(genome, menu_cfg)
+            _apply_level_gene_freeze(effective_genome, level, generation, ga_cfg.generations)
+            result = run_game_session(
+                screen,
+                clock,
+                SessionConfig(
+                    level_id=level,
+                    manual=False,
+                    use_agent=True,
+                    sandbox_enemy_count=menu_cfg.sandbox_enemy_count,
+                    render=False,
+                    max_frames=train_max_frames,
+                    agent_genome=effective_genome,
+                    path_hint=generation_hint,
+                ),
+            )
+            genome.fitness = _fitness_from_result(result)
+            gen_results[id(genome)] = result
+            last_result = result
+            detail_lines.append(
+                f"gen={generation + 1}/{ga_cfg.generations} | ind={genome_idx + 1}/{len(population)} | "
+                f"fit={genome.fitness:.2f} | kills={result.enemies_killed}/{result.total_enemies} | "
+                f"dmg={result.damage_dealt:.0f} | "
+                f"sim_t={result.elapsed_frames / max(1.0, float(FPS)):.2f}s | real_t={result.elapsed_ms / 1000.0:.2f}s | "
+                f"frames={result.elapsed_frames} | "
+                f"stuck={result.max_still_frames}f | hongos={result.hazard_hits} | "
+                f"ok={'SI' if result.success else 'NO'} | motivo={result.reason}"
+            )
+            if result.success:
+                success_count += 1
+
+        ranked = sorted(population, key=lambda g: g.fitness, reverse=True)
+        gen_best = ranked[0]
+        best_result = gen_results.get(id(gen_best))
+        gen_success_rate = (success_count / max(1, len(ranked))) * 100.0
+        if best_result is None:
+            history_lines.append(
+                f"Gen {generation + 1}: best={gen_best.fitness:.1f} | success={gen_success_rate:.0f}%"
+            )
+        else:
+            history_lines.append(
+                "Gen "
+                f"{generation + 1}: best={gen_best.fitness:.1f} | "
+                f"kills={best_result.enemies_killed}/{best_result.total_enemies} | "
+                f"dmg={best_result.damage_dealt:.0f} | "
+                f"stuck={best_result.max_still_frames}f | hongos={best_result.hazard_hits} | success={gen_success_rate:.0f}%"
+            )
+
+        if gen_best.fitness > best_overall.fitness:
+            best_overall = gen_best.copy()
+            if best_result is not None:
+                hint_source = best_result.route_hint or best_result.trace_points
+                if hint_source:
+                    best_overall_trace = _compress_trace_points(hint_source, min_step=14.0, max_points=320)
+        if best_result is not None:
+            hint_source = best_result.route_hint or best_result.trace_points
+            candidate_hint = _compress_trace_points(hint_source, min_step=14.0, max_points=320) if hint_source else ()
+            better_hint = (
+                best_result.enemies_killed > best_hint_kills
+                or (
+                    best_result.enemies_killed == best_hint_kills
+                    and (
+                        best_result.damage_dealt > best_hint_damage
+                        or (
+                            abs(best_result.damage_dealt - best_hint_damage) <= 1e-6
+                            and best_result.max_still_frames < best_hint_stuck
+                        )
+                    )
+                )
+            )
+            if candidate_hint and better_hint:
+                generation_hint = candidate_hint
+                best_hint_kills = int(best_result.enemies_killed)
+                best_hint_damage = float(best_result.damage_dealt)
+                best_hint_stuck = int(best_result.max_still_frames)
+
+        population = evolve_population(ranked, ga_cfg, rng)
+        if population:
+            # Persistimos el mejor global sin mutar para estabilizar aprendizaje entre generaciones.
+            population[0] = best_overall.copy()
+            _apply_level_gene_freeze(population[0], level, generation + 1, ga_cfg.generations)
+
+    runtime_state.best_genome = _merge_weights(best_overall, menu_cfg)
+    runtime_state.best_path_hint = tuple(best_overall_trace)
+    if runtime_state.best_genome_by_level is None:
+        runtime_state.best_genome_by_level = {}
+    if runtime_state.best_path_hint_by_level is None:
+        runtime_state.best_path_hint_by_level = {}
+    runtime_state.best_genome_by_level[level] = runtime_state.best_genome.copy()
+    runtime_state.best_path_hint_by_level[level] = tuple(best_overall_trace)
+
+    validation = run_game_session(
+        screen,
+        clock,
+        SessionConfig(
+            level_id=level,
+            manual=False,
+            use_agent=True,
+            sandbox_enemy_count=menu_cfg.sandbox_enemy_count,
+            render=False,
+            max_frames=validation_max_frames,
+            agent_genome=runtime_state.best_genome,
+            path_hint=runtime_state.best_path_hint,
+        ),
+    )
+
+    status = "PASO" if validation.success else "NO PASO"
+    history_lines.append(
+        "Validacion final: "
+        f"{status} | kills={validation.enemies_killed}/{validation.total_enemies} | "
+        f"dmg={validation.damage_dealt:.0f} | "
+        f"sim_t={validation.elapsed_frames / max(1.0, float(FPS)):.1f}s | real_t={validation.elapsed_ms / 1000.0:.1f}s | "
+        f"stuck_max={validation.max_still_frames}f | hongos={validation.hazard_hits}"
+    )
+
+    report_path = _save_training_txt(
+        level=level,
+        menu_cfg=menu_cfg,
+        summary_lines=history_lines,
+        detail_lines=detail_lines,
+    )
+    if report_path is not None:
+        history_lines.append(f"TXT guardado: {report_path}")
+    else:
+        history_lines.append("TXT guardado: error al exportar reporte")
+
+    output_lines = [
+        f"Nivel: {level}",
+        f"Poblacion: {ga_cfg.population_size} | Generaciones: {ga_cfg.generations}",
+        f"Mejor fitness: {best_overall.fitness:.2f}",
+    ]
+    output_lines.extend(history_lines[-6:])
+    return {
+        "title": "Entrenamiento IA",
+        "lines": output_lines,
+    }
+
+
+def _save_training_txt(
+    level: str,
+    menu_cfg: AgentMenuConfig,
+    summary_lines: list[str],
+    detail_lines: list[str],
+) -> str | None:
+    report_dir = Path("training_reports")
+    report_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_path = report_dir / f"training_{level}_{stamp}.txt"
+
+    try:
+        with report_path.open("w", encoding="utf-8") as handle:
+            handle.write("Atraco Tactico - Reporte de Entrenamiento IA\n")
+            handle.write(f"Fecha: {datetime.now().isoformat(timespec='seconds')}\n")
+            handle.write(f"Nivel: {level}\n")
+            handle.write(
+                "Config: "
+                f"poblacion={menu_cfg.population_size}, generaciones={menu_cfg.generations}, "
+                f"seleccion={menu_cfg.selection_mode}, cruce={menu_cfg.crossover_mode}, "
+                f"mutacion={menu_cfg.mutation_rate:.2f}x{menu_cfg.mutation_scale:.2f}, "
+                f"pesos(a/s/o/p)={menu_cfg.weight_aggression:.2f}/{menu_cfg.weight_survival:.2f}/"
+                f"{menu_cfg.weight_objective:.2f}/{menu_cfg.weight_pathing:.2f}\n"
+            )
+            handle.write("\nResumen:\n")
+            for line in summary_lines:
+                handle.write(f"- {line}\n")
+            handle.write("\nDetalle por individuo:\n")
+            for line in detail_lines:
+                handle.write(f"- {line}\n")
+    except Exception:
+        return None
+
+    return str(report_path)
+
+
+def _save_benchmark_txt(summary_lines: list[str], detail_lines: list[str], episodes: int) -> str | None:
+    report_dir = Path("benchmark_reports")
+    report_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_path = report_dir / f"benchmark_{stamp}.txt"
+
+    try:
+        with report_path.open("w", encoding="utf-8") as handle:
+            handle.write("Atraco Tactico - Benchmark IA\n")
+            handle.write(f"Fecha: {datetime.now().isoformat(timespec='seconds')}\n")
+            handle.write(f"Corridas por nivel: {episodes}\n")
+            handle.write("\nResumen:\n")
+            for line in summary_lines:
+                handle.write(f"- {line}\n")
+            handle.write("\nDetalle por corrida:\n")
+            for line in detail_lines:
+                handle.write(f"- {line}\n")
+    except Exception:
+        return None
+
+    return str(report_path)
+
+
+def run_benchmark(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: AgentMenuConfig, runtime_state: RuntimeState):
+    base_genome = runtime_state.best_genome if runtime_state.best_genome is not None else default_genome()
+    base_path_hint = tuple(getattr(runtime_state, "best_path_hint", ()))
+
+    lines = []
+    detail_lines: list[str] = []
+    levels = ["level_1", "level_2", "level_3"]
+    episodes = max(1, int(menu_cfg.benchmark_runs))
+
+    for level in levels:
+        if level in ("level_2", "level_3"):
+            lines.append(f"{level}: pendiente (sin mapa definitivo)")
+            detail_lines.append(f"{level}: sin ejecucion (nivel pendiente)")
+            continue
+
+        wins = 0
+        total_kills = 0
+        total_enemy = 0
+        total_time = 0
+        total_damage = 0.0
+        total_stuck = 0
+        total_hazards = 0
+
+        for run_idx in range(episodes):
+            by_level_gen = runtime_state.best_genome_by_level or {}
+            by_level_hint = runtime_state.best_path_hint_by_level or {}
+            level_genome = by_level_gen.get(level, base_genome)
+            level_hint = tuple(by_level_hint.get(level, base_path_hint))
+            result = run_game_session(
+                screen,
+                clock,
+                SessionConfig(
+                    level_id=level,
+                    manual=False,
+                    use_agent=True,
+                    sandbox_enemy_count=menu_cfg.sandbox_enemy_count,
+                    render=False,
+                    max_frames=14000 if level == "level_1" else 9000,
+                    agent_genome=level_genome,
+                    path_hint=level_hint,
+                ),
+            )
+            wins += 1 if result.success else 0
+            total_kills += result.enemies_killed
+            total_enemy += max(1, result.total_enemies)
+            total_time += result.elapsed_ms
+            total_damage += result.damage_dealt
+            total_stuck += result.max_still_frames
+            total_hazards += result.hazard_hits
+            detail_lines.append(
+                f"{level} | corrida={run_idx + 1}/{episodes} | paso={'SI' if result.success else 'NO'} | "
+                f"motivo={result.reason} | enemigos={result.enemies_killed}/{result.total_enemies} | "
+                f"dano={result.damage_dealt:.0f} | tiempo={result.elapsed_ms / 1000.0:.2f}s | frames={result.elapsed_frames} | "
+                f"stuck={result.max_still_frames}f | hongos={result.hazard_hits}"
+            )
+
+        success_rate = (wins / episodes) * 100.0
+        avg_kills = (total_kills / total_enemy) * 100.0
+        avg_time = (total_time / episodes) / 1000.0
+        avg_damage = total_damage / episodes
+        avg_stuck = total_stuck / episodes
+        avg_hazards = total_hazards / episodes
+        lines.append(
+            f"{level}: win={success_rate:.0f}% | avance={avg_kills:.0f}% | dmg={avg_damage:.0f} | "
+            f"tiempo={avg_time:.1f}s | stuck={avg_stuck:.0f}f | hongos={avg_hazards:.1f}"
+        )
+
+    report_path = _save_benchmark_txt(lines, detail_lines, episodes)
+    if report_path is not None:
+        lines.append(f"TXT guardado: {report_path}")
+    else:
+        lines.append("TXT guardado: error al exportar reporte")
+
+    return {
+        "title": "Benchmark IA",
+        "lines": lines,
+    }
+
+
+def _run_manual_or_agent_session(screen, clock, menu_cfg: AgentMenuConfig, runtime_state: RuntimeState, level_id: str, use_agent: bool, backoffice_overlay: bool):
+    genome = None
+    path_hint = None
+    if use_agent:
+        by_level_gen = runtime_state.best_genome_by_level or {}
+        by_level_hint = runtime_state.best_path_hint_by_level or {}
+        genome = by_level_gen.get(level_id, runtime_state.best_genome)
+        path_hint = tuple(by_level_hint.get(level_id, getattr(runtime_state, "best_path_hint", ())))
+    result = run_game_session(
+        screen,
+        clock,
+        SessionConfig(
+            level_id=level_id,
+            manual=not use_agent,
+            use_agent=use_agent,
+            sandbox_enemy_count=menu_cfg.sandbox_enemy_count,
+            render=True,
+            max_frames=20000,
+            agent_genome=genome,
+            path_hint=path_hint,
+            backoffice_overlay=backoffice_overlay,
+            population_preview=menu_cfg.population_size,
+            generation_preview=menu_cfg.generations,
+            selection_preview=menu_cfg.selection_mode,
+            crossover_preview=menu_cfg.crossover_mode,
+        ),
+    )
+
+    status = "Mision completada" if result.success else "Sesion finalizada"
+    lines = [
+        f"Nivel: {result.level_id}",
+        f"Resultado: {status}",
+        f"Motivo: {result.reason}",
+        f"Enemigos: {result.enemies_killed}/{result.total_enemies}",
+        f"Dano infligido: {result.damage_dealt:.0f}",
+        f"Golpes por hongos: {result.hazard_hits}",
+        f"Tiempo: {result.elapsed_ms / 1000.0:.1f}s ({result.elapsed_frames} frames)",
+    ]
+    _show_info_screen(screen, clock, "Resultado", lines)
+
+
+def main() -> str:
+    pygame.init()
+    try:
+        pygame.mixer.init()
+    except Exception:
+        pass
+
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    pygame.display.set_caption(SCREEN_TITLE)
+    clock = pygame.time.Clock()
+
+    menu_cfg = AgentMenuConfig()
+    runtime_state = RuntimeState(
+        best_genome=default_genome(),
+        best_path_hint=(),
+        best_genome_by_level={},
+        best_path_hint_by_level={},
+    )
+
+    while True:
+        menu_result: MenuResult = run_main_menu(screen, clock, menu_cfg)
+        menu_cfg = menu_result.config.copy()
+        action = menu_result.action
+
+        if action == "quit":
+            break
+
+        if action == "play_level_1":
+            _run_manual_or_agent_session(screen, clock, menu_cfg, runtime_state, "level_1", use_agent=False, backoffice_overlay=False)
+            continue
+
+        if action == "play_sandbox":
+            _run_manual_or_agent_session(screen, clock, menu_cfg, runtime_state, "sandbox", use_agent=False, backoffice_overlay=False)
+            continue
+
+        if action == "play_agent_level_1":
+            _run_manual_or_agent_session(screen, clock, menu_cfg, runtime_state, "level_1", use_agent=True, backoffice_overlay=True)
+            continue
+
+        if action == "play_agent_sandbox":
+            _run_manual_or_agent_session(screen, clock, menu_cfg, runtime_state, "sandbox", use_agent=True, backoffice_overlay=True)
+            continue
+
+        if action == "backoffice_demo":
+            demo_level = menu_cfg.training_level
+            if demo_level in ("level_2", "level_3"):
+                _show_info_screen(
+                    screen,
+                    clock,
+                    "Backoffice Demo",
+                    [
+                        f"Nivel seleccionado: {demo_level}",
+                        "Este nivel aun no esta listo.",
+                        "Cambia a Nivel 1 o Sandbox para demo real del agente.",
+                    ],
+                )
+            else:
+                _run_manual_or_agent_session(
+                    screen,
+                    clock,
+                    menu_cfg,
+                    runtime_state,
+                    demo_level,
+                    use_agent=True,
+                    backoffice_overlay=True,
+                )
+            continue
+
+        if action == "train_agent":
+            report = train_agent(screen, clock, menu_cfg, runtime_state)
+            _show_info_screen(screen, clock, report["title"], report["lines"])
+            continue
+
+        if action == "run_benchmark":
+            report = run_benchmark(screen, clock, menu_cfg, runtime_state)
+            _show_info_screen(screen, clock, report["title"], report["lines"])
+            continue
+
+        if action == "level_2_placeholder":
+            _show_info_screen(
+                screen,
+                clock,
+                "Nivel 2",
+                [
+                    "Nivel en construccion.",
+                    "Ya esta conectado al benchmark/backoffice como pendiente.",
+                ],
+            )
+            continue
+
+        if action == "level_3_placeholder":
+            _show_info_screen(
+                screen,
+                clock,
+                "Nivel 3",
+                [
+                    "Nivel en construccion.",
+                    "Ya esta conectado al benchmark/backoffice como pendiente.",
+                ],
+            )
+            continue
+
+        _show_info_screen(
+            screen,
+            clock,
+            "Accion no reconocida",
+            [f"No se pudo ejecutar la accion: {action}"],
+        )
 
     pygame.quit()
-    return final_action
+    return "quit"
 
 
 if __name__ == "__main__":
-    next_action = "restart"
-    while next_action == "restart":
-        next_action = main()
+    main()
     sys.exit()

@@ -6,20 +6,20 @@ from dataclasses import dataclass
 import pygame
 
 from config.settings import (
+    ENABLED_POTION_TYPES,
     LAYER_COFRE_CLOSED,
     LAYER_COFRE_OPEN,
+    MAX_POTION_SPAWNS_PER_TYPE,
     SPRITES_DIR,
     TILE_SIZE,
 )
 
 
-FRAGMENT_FILES = ("k-frag1.png", "k-frag2.png", "k-frag3.png")
-POTION_FILES = {
+ALL_POTION_FILES = {
     "vida": "pos-vida.png",
     "escudo": "pos-escudo.png",
     "poder": "pos-poder.png",
 }
-KEY_FILE = "llave.png"
 SALAMI_FILE = "salami.png"
 
 # Coordenadas de tiles indicadas por el usuario para el item del cofre
@@ -106,25 +106,24 @@ class ItemManager:
         self.game_map = game_map
         self.rng = random.Random()
 
-        self.fragment_images = [self._load_icon(name) for name in FRAGMENT_FILES]
-        self.key_image = self._load_icon(KEY_FILE)
+        self.enabled_potion_types = tuple(
+            potion_type for potion_type in ENABLED_POTION_TYPES
+            if potion_type in ALL_POTION_FILES
+        )
+        if not self.enabled_potion_types:
+            self.enabled_potion_types = ("vida",)
+
         self.salami_image = self._load_icon(SALAMI_FILE)
         self.potion_images = {
-            potion_type: self._load_icon(sprite_name)
-            for potion_type, sprite_name in POTION_FILES.items()
+            potion_type: self._load_icon(ALL_POTION_FILES[potion_type])
+            for potion_type in self.enabled_potion_types
         }
 
         self.spawn_polygons = self._load_spawn_polygons()
         if not self.spawn_polygons:
-            print("[items] Warning: no se encontro capa de spawn poligonal (inside-terrain). Se usara todo el mapa caminable.")
+            print("[items] Warning: sin capa poligonal de spawn. Se usaran puntos caminables del mapa.")
 
         self.walkable_points = self._build_walkable_points()
-
-        self.fragments_collected = 0
-        self.active_fragment: Pickup | None = None
-        self.next_fragment_spawn_ms = pygame.time.get_ticks() + 600
-
-        self.key_anim: dict | None = None
 
         self.chest_opened = False
         self.chest_trigger_rect = self._build_chest_trigger_rect()
@@ -134,10 +133,10 @@ class ItemManager:
 
         now = pygame.time.get_ticks()
         self.active_potions: dict[str, Pickup] = {}
+        self.potion_spawn_count = {potion_type: 0 for potion_type in self.enabled_potion_types}
         self.next_potion_spawn_ms = {
-            "vida": now + self.rng.randint(1800, 3200),
-            "escudo": now + self.rng.randint(2300, 4200),
-            "poder": now + self.rng.randint(3000, 5200),
+            potion_type: now + self.rng.randint(1600, 3200)
+            for potion_type in self.enabled_potion_types
         }
 
     def _load_icon(self, filename: str) -> pygame.Surface:
@@ -186,8 +185,25 @@ class ItemManager:
     def _load_spawn_polygons(self) -> list[list[tuple[float, float]]]:
         target_names = {self._normalize_layer_name(n) for n in SPAWN_AREA_LAYER_CANDIDATES}
         polygons: list[list[tuple[float, float]]] = []
+        tmx_data = getattr(self.game_map, "tmx_data", None)
 
-        for layer in getattr(self.game_map.tmx_data, "objectgroups", []):
+        # Sandbox/procedural maps: fallback to play area rect if available.
+        play_area = getattr(self.game_map, "play_area_rect", None)
+        if play_area is not None:
+            polygons.append(
+                [
+                    (float(play_area.left), float(play_area.top)),
+                    (float(play_area.right), float(play_area.top)),
+                    (float(play_area.right), float(play_area.bottom)),
+                    (float(play_area.left), float(play_area.bottom)),
+                ]
+            )
+            return polygons
+
+        if tmx_data is None:
+            return polygons
+
+        for layer in getattr(tmx_data, "objectgroups", []):
             layer_name = self._normalize_layer_name(getattr(layer, "name", ""))
             if layer_name not in target_names:
                 continue
@@ -319,17 +335,11 @@ class ItemManager:
         return merged.inflate(18, 18)
 
     def _ensure_player_fields(self, player):
-        if not hasattr(player, "key_fragments"):
-            player.key_fragments = 0
-        if not hasattr(player, "has_key"):
-            player.has_key = False
         if not hasattr(player, "has_salami"):
             player.has_salami = False
 
     def _collect_existing_positions(self) -> list[pygame.Vector2]:
         positions: list[pygame.Vector2] = []
-        if self.active_fragment is not None:
-            positions.append(self.active_fragment.pos)
         positions.extend(pickup.pos for pickup in self.active_potions.values())
         if self.salami_pickup is not None:
             positions.append(self.salami_pickup.pos)
@@ -355,72 +365,28 @@ class ItemManager:
         px, py = self.rng.choice(self.walkable_points)
         return pygame.Vector2(float(px), float(py))
 
-    def _spawn_next_fragment(self, now_ms: int, player):
-        if self.fragments_collected >= len(self.fragment_images):
-            return
-        spawn_pos = self._pick_spawn_point(player, min_player_distance=TILE_SIZE * 3.0)
-        if spawn_pos is None:
-            self.next_fragment_spawn_ms = now_ms + 500
-            return
+    def get_enemy_spawn_points(
+        self,
+        count: int,
+        player,
+        min_player_distance: float = TILE_SIZE * 3.5,
+        min_between_distance: float = TILE_SIZE * 2.4,
+    ) -> list[pygame.Vector2]:
+        points: list[pygame.Vector2] = []
+        if count <= 0 or not self.walkable_points:
+            return points
 
-        idx = self.fragments_collected
-        self.active_fragment = Pickup(
-            kind="fragment",
-            subtype=str(idx + 1),
-            image=self.fragment_images[idx],
-            pos=spawn_pos,
-            spawned_ms=now_ms,
-            lifetime_ms=None,
-            phase=self.rng.random() * math.tau,
-            state="spawning",
-            state_ms=now_ms,
-        )
-
-    def _start_key_animation(self, now_ms: int, player):
-        self.key_anim = {
-            "start_ms": now_ms,
-            "duration_ms": 1100,
-            "origin": pygame.Vector2(float(player.rect.centerx), float(player.rect.top + 8)),
-        }
-
-    def _update_fragments(self, now_ms: int, player, allow_pickups: bool):
-        if (
-            self.fragments_collected < 3
-            and self.active_fragment is None
-            and self.key_anim is None
-            and now_ms >= self.next_fragment_spawn_ms
-        ):
-            self._spawn_next_fragment(now_ms, player)
-
-        if self.active_fragment is None:
-            return
-
-        if allow_pickups and self.active_fragment.state in ("spawning", "idle"):
-            if self.active_fragment.collision_rect(now_ms).colliderect(player.hitbox):
-                self.active_fragment.start_collect(now_ms)
-
-        result = self.active_fragment.update(now_ms)
-        if result == "collected":
-            self.fragments_collected += 1
-            player.key_fragments = self.fragments_collected
-            self.active_fragment = None
-            if self.fragments_collected >= 3:
-                self._start_key_animation(now_ms, player)
-            else:
-                self.next_fragment_spawn_ms = now_ms + 900
-
-    def _update_key_animation(self, now_ms: int, player):
-        if self.key_anim is None:
-            return
-        duration = self.key_anim["duration_ms"]
-        if now_ms - self.key_anim["start_ms"] >= duration:
-            player.has_key = True
-            self.key_anim = None
-
-    def _player_near_chest(self, player) -> bool:
-        if self.chest_trigger_rect is None:
-            return False
-        return player.hitbox.colliderect(self.chest_trigger_rect)
+        max_attempts = max(80, count * 140)
+        attempts = 0
+        while len(points) < count and attempts < max_attempts:
+            attempts += 1
+            point = self._pick_spawn_point(player, min_player_distance=min_player_distance)
+            if point is None:
+                continue
+            if any(point.distance_to(other) < min_between_distance for other in points):
+                continue
+            points.append(point)
+        return points
 
     def _tile_center(self, tile_x: int, tile_y: int) -> pygame.Vector2:
         return pygame.Vector2(
@@ -428,7 +394,11 @@ class ItemManager:
             float((tile_y * self.game_map.tile_h) + (self.game_map.tile_h // 2)),
         )
 
-    def _open_chest(self, now_ms: int):
+    def open_chest(self, now_ms: int | None = None):
+        if self.chest_opened:
+            return
+        if now_ms is None:
+            now_ms = pygame.time.get_ticks()
         self.chest_opened = True
         if LAYER_COFRE_CLOSED in self.game_map.layer_visible:
             self.game_map.layer_visible[LAYER_COFRE_CLOSED] = False
@@ -476,6 +446,9 @@ class ItemManager:
             self.salami_pickup = None
 
     def _schedule_next_potion(self, potion_type: str, now_ms: int, collected: bool):
+        if self.potion_spawn_count.get(potion_type, 0) >= MAX_POTION_SPAWNS_PER_TYPE:
+            self.next_potion_spawn_ms[potion_type] = None
+            return
         if collected:
             self.next_potion_spawn_ms[potion_type] = now_ms + self.rng.randint(2400, 5200)
         else:
@@ -489,11 +462,45 @@ class ItemManager:
         elif potion_type == "poder":
             player.energy = min(player.max_energy, player.energy + 30)
 
+    def get_active_potion_positions(self, potion_types: tuple[str, ...] = ("vida",)) -> list[tuple[str, pygame.Vector2]]:
+        targets: list[tuple[str, pygame.Vector2]] = []
+        for potion_type, pickup in self.active_potions.items():
+            if potion_type not in potion_types:
+                continue
+            if pickup.state not in ("spawning", "idle"):
+                continue
+            targets.append((potion_type, pygame.Vector2(float(pickup.pos.x), float(pickup.pos.y))))
+        return targets
+
+    def consume_potion_at(
+        self,
+        world_x: float,
+        world_y: float,
+        radius: float,
+        potion_types: tuple[str, ...] = ("vida",),
+    ) -> str | None:
+        now_ms = pygame.time.get_ticks()
+        center = pygame.Vector2(float(world_x), float(world_y))
+        for potion_type, pickup in list(self.active_potions.items()):
+            if potion_type not in potion_types:
+                continue
+            if pickup.state not in ("spawning", "idle"):
+                continue
+            if center.distance_to(pickup.pos) > float(radius):
+                continue
+            del self.active_potions[potion_type]
+            self._schedule_next_potion(potion_type, now_ms, collected=True)
+            return potion_type
+        return None
+
     def _spawn_potions(self, now_ms: int, player):
-        for potion_type in POTION_FILES:
+        for potion_type in self.enabled_potion_types:
             if potion_type in self.active_potions:
                 continue
-            if now_ms < self.next_potion_spawn_ms[potion_type]:
+            if self.potion_spawn_count.get(potion_type, 0) >= MAX_POTION_SPAWNS_PER_TYPE:
+                continue
+            next_spawn_at = self.next_potion_spawn_ms.get(potion_type)
+            if next_spawn_at is None or now_ms < next_spawn_at:
                 continue
 
             spawn_pos = self._pick_spawn_point(player, min_player_distance=TILE_SIZE * 2.2)
@@ -512,6 +519,7 @@ class ItemManager:
                 state="spawning",
                 state_ms=now_ms,
             )
+            self.potion_spawn_count[potion_type] = self.potion_spawn_count.get(potion_type, 0) + 1
 
     def _update_potions(self, now_ms: int, player, allow_pickups: bool):
         self._spawn_potions(now_ms, player)
@@ -535,12 +543,6 @@ class ItemManager:
         self._ensure_player_fields(player)
 
         allow_pickups = not intro_active
-        self._update_fragments(now_ms, player, allow_pickups)
-        self._update_key_animation(now_ms, player)
-
-        if player.has_key and not self.chest_opened and self._player_near_chest(player):
-            self._open_chest(now_ms)
-
         self._update_salami_reward(now_ms, player, allow_pickups)
         self._update_potions(now_ms, player, allow_pickups)
 
@@ -573,10 +575,6 @@ class ItemManager:
 
         draw_entries: list[tuple[float, pygame.Surface, float, float, int, float]] = []
 
-        if self.active_fragment is not None:
-            x, y, alpha, scale = self.active_fragment.draw_params(now_ms)
-            draw_entries.append((y, self.active_fragment.image, x, y, alpha, scale))
-
         for pickup in self.active_potions.values():
             x, y, alpha, scale = pickup.draw_params(now_ms)
             draw_entries.append((y, pickup.image, x, y, alpha, scale))
@@ -603,35 +601,5 @@ class ItemManager:
             self._draw_sprite(target_surface, camera, image, x, y, alpha, scale)
 
     def draw_overlay(self, target_surface: pygame.Surface, camera, player):
-        if self.key_anim is None:
-            return
-
-        now_ms = pygame.time.get_ticks()
-        elapsed = now_ms - self.key_anim["start_ms"]
-        duration = self.key_anim["duration_ms"]
-        t = max(0.0, min(1.0, elapsed / max(duration, 1)))
-
-        # El origen sigue al jugador para que la obtencion se sienta "anclada"
-        origin_x = float(player.rect.centerx)
-        origin_y = float(player.rect.top + 8)
-
-        if t <= 0.75:
-            rise_t = t / 0.75
-            y = origin_y - (14.0 + 28.0 * rise_t)
-            alpha = 255
-            scale = 0.72 + (0.36 * rise_t)
-        else:
-            fade_t = (t - 0.75) / 0.25
-            y = origin_y - 42.0 + (10.0 * fade_t)
-            alpha = int(255 * (1.0 - fade_t))
-            scale = 1.08 - (0.22 * fade_t)
-
-        self._draw_sprite(
-            target_surface=target_surface,
-            camera=camera,
-            image=self.key_image,
-            x=origin_x,
-            y=y,
-            alpha=alpha,
-            scale=scale,
-        )
+        # Sin overlay temporal por ahora (antes se usaba para animacion de llave).
+        return

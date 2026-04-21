@@ -1,0 +1,22 @@
+Atraco Tactico - Benchmark IA
+Fecha: 2026-04-21T01:40:21
+Corridas por nivel: 10
+
+Resumen:
+- level_1: win=0% | avance=20% | dmg=80 | tiempo=0.1s | stuck=125f | hongos=0.1
+- level_2: pendiente (sin mapa definitivo)
+- level_3: pendiente (sin mapa definitivo)
+
+Detalle por corrida:
+- level_1 | corrida=1/10 | paso=NO | motivo=timeout | enemigos=1/5 | dano=80 | tiempo=0.13s | stuck=117f | hongos=0
+- level_1 | corrida=2/10 | paso=NO | motivo=timeout | enemigos=1/5 | dano=80 | tiempo=0.13s | stuck=117f | hongos=0
+- level_1 | corrida=3/10 | paso=NO | motivo=timeout | enemigos=1/5 | dano=80 | tiempo=0.12s | stuck=117f | hongos=0
+- level_1 | corrida=4/10 | paso=NO | motivo=timeout | enemigos=1/5 | dano=80 | tiempo=0.12s | stuck=197f | hongos=1
+- level_1 | corrida=5/10 | paso=NO | motivo=timeout | enemigos=1/5 | dano=80 | tiempo=0.12s | stuck=117f | hongos=0
+- level_1 | corrida=6/10 | paso=NO | motivo=timeout | enemigos=1/5 | dano=80 | tiempo=0.14s | stuck=117f | hongos=0
+- level_1 | corrida=7/10 | paso=NO | motivo=timeout | enemigos=1/5 | dano=80 | tiempo=0.13s | stuck=117f | hongos=0
+- level_1 | corrida=8/10 | paso=NO | motivo=timeout | enemigos=1/5 | dano=80 | tiempo=0.13s | stuck=117f | hongos=0
+- level_1 | corrida=9/10 | paso=NO | motivo=timeout | enemigos=1/5 | dano=80 | tiempo=0.12s | stuck=117f | hongos=0
+- level_1 | corrida=10/10 | paso=NO | motivo=timeout | enemigos=1/5 | dano=80 | tiempo=0.12s | stuck=117f | hongos=0
+- level_2: sin ejecucion (nivel pendiente)
+- level_3: sin ejecucion (nivel pendiente)

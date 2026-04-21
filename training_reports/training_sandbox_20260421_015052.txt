@@ -1,0 +1,12 @@
+Atraco Tactico - Reporte de Entrenamiento IA
+Fecha: 2026-04-21T01:50:52
+Nivel: sandbox
+Config: poblacion=2, generaciones=1, seleccion=tournament, cruce=uniform, mutacion=0.10x0.10, pesos(a/s/o/p)=1.00/1.00/1.20/1.00
+
+Resumen:
+- Gen 1: best=3408.1 | kills=1/1 | dmg=80 | stuck=40f | hongos=0 | success=100%
+- Validacion final: PASO | kills=1/1 | dmg=80 | tiempo=0.0s | stuck_max=40f | hongos=0
+
+Detalle por individuo:
+- gen=1/1 | ind=1/2 | fit=3408.10 | kills=1/1 | dmg=80 | t=0.04s | stuck=40f | hongos=0 | ok=SI | motivo=completed
+- gen=1/1 | ind=2/2 | fit=3327.83 | kills=1/1 | dmg=80 | t=0.04s | stuck=59f | hongos=0 | ok=SI | motivo=completed

@@ -19,23 +19,34 @@ PLAYER_MAX_SHIELD  = 50
 PLAYER_MAX_ENERGY  = 100    # limite de energia para uso de proyectiles
 PLAYER_ATTACK_DMGM = 20     # daño melee
 PLAYER_ATTACK_DMGR = 15     # daño ranged (proyectil)
+PLAYER_RANGED_MANA_COST = 12  # costo de mana por disparo ranged (click)
+PLAYER_BULLET_SPEED = 4.4
+
+# Pociones activas y limite de spawns por tipo durante una partida.
+# Para jugar solo con vida+escudo: ("vida", "escudo")
+ENABLED_POTION_TYPES = ("vida", "escudo", "poder")
+MAX_POTION_SPAWNS_PER_TYPE = 1
 
 # ── Enemigos ──────────────────────────────────────────────────
-ENEMY_A_SPEED        = 2
+ENEMY_A_SPEED        = 0.72  # Ajustado: el perseguidor rapido estaba demasiado agresivo
 ENEMY_A_HEALTH       = 80
-ENEMY_A_DAMAGE       = 15
+ENEMY_A_DAMAGE       = 3
 ENEMY_A_VISION_RANGE = 200   # px
 
 ENEMY_B_SPEED        = 0     # no se mueve
 ENEMY_B_HEALTH       = 60
-ENEMY_B_DAMAGE       = 10
+ENEMY_B_DAMAGE       = 5
 ENEMY_B_VISION_RANGE = 300
 
-ENEMY_C_SPEED        = 2
+ENEMY_C_SPEED        = 0.75  # Ajustado: velocidad mas controlada para lectura de combate
 ENEMY_C_HEALTH       = 50
-ENEMY_C_DAMAGE       = 10
+ENEMY_C_DAMAGE       = 5
 ENEMY_C_VISION_RANGE = 250
 ENEMY_C_FLEE_RANGE   = 80    # si el jugador está más cerca que esto, huye
+ENEMY_MELEE_RANGE    = 34
+ENEMY_CLOSE_RANGE    = 66
+ENEMY_BULLET_SPEED   = 3.4
+ENEMY_LOW_HP_RATIO   = 0.35
 
 # ── Colores (debug / UI) ──────────────────────────────────────
 COLOR_BLACK      = (0,   0,   0)
@@ -76,7 +87,7 @@ MAP_FILE = next(
 # --- Capas de Suelo / Base ---
 LAYER_PISO_GRASS      = "piso-grass"
 LAYER_PISO_DECOR      = "piso-decor"
-LAYER_COLLISIONS      = "collisions"
+LAYER_COLLISIONS      = "Coli"
 LAYER_WATER           = "agua"
 
 # --- Capas de Estructura ---
