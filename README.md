@@ -272,13 +272,10 @@ En `ai/sensors.py`:
 - Precisión de sensores
 - Ruido ambiental
 
-## 📝 Licencia
-
-Este proyecto es parte del desarrollo de Smart-Top-Down-Game.
 
 ## 👨‍💻 Autor
 
-Mathias (Math-Git-05)
+Mathew (Math-Git-05)
 
 ---
 
