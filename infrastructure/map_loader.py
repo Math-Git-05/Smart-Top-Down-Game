@@ -9,6 +9,7 @@ from pytmx.util_pygame import load_pygame
 from config.settings import (
     LAYER_COLLISIONS,
     LAYER_HONGOS,
+    LAYER_WATER,
     MAP_RENDER_LAYERS_OVER_PLAYER,
     MAP_RENDER_LAYERS_UNDER_PLAYER,
     MAP_TILED_LAYER_ORDER,
@@ -33,10 +34,18 @@ class MapLoader:
         self.map_width = self.tmx_data.width * self.tile_w
         self.map_height = self.tmx_data.height * self.tile_h
 
-        self.layers_under_player = MAP_RENDER_LAYERS_UNDER_PLAYER
-        self.layers_over_player = MAP_RENDER_LAYERS_OVER_PLAYER
-        self.layer_surfaces = self._build_layer_surfaces()
         self._all_layers = list(self.tmx_data.layers)
+        self._tile_layer_names = self._discover_tile_layer_names()
+        self.water_ref = next(
+            (
+                name
+                for name in self._tile_layer_names
+                if self._normalize_layer_name(name) == self._normalize_layer_name(LAYER_WATER)
+            ),
+            LAYER_WATER,
+        )
+        self.layer_surfaces = self._build_layer_surfaces()
+        self.layers_under_player, self.layers_over_player = self._resolve_render_groups()
         
         # Diccionario para permitir ocultar/mostrar capas dinámicamente
         self.layer_visible = {layer: True for layer in self.layer_surfaces}
@@ -104,6 +113,48 @@ class MapLoader:
                 return candidate
         return None
 
+    def _discover_tile_layer_names(self) -> list[str]:
+        names: list[str] = []
+        for layer in self._all_layers:
+            if not isinstance(layer, pytmx.TiledTileLayer):
+                continue
+            layer_name = str(getattr(layer, "name", "") or "").strip()
+            if not layer_name:
+                continue
+            if self._is_collision_layer_name(layer_name):
+                continue
+            if layer_name not in names:
+                names.append(layer_name)
+        return names
+
+    def _looks_over_layer(self, layer_name: str) -> bool:
+        norm = self._normalize_layer_name(layer_name)
+        return ("over" in norm) or norm.endswith("-over") or norm.startswith("overlay")
+
+    def _resolve_render_groups(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        known_under = [name for name in MAP_RENDER_LAYERS_UNDER_PLAYER if name in self.layer_surfaces]
+        known_over = [name for name in MAP_RENDER_LAYERS_OVER_PLAYER if name in self.layer_surfaces]
+        used = set(known_under + known_over)
+
+        for name in self._tile_layer_names:
+            if name not in self.layer_surfaces or name in used:
+                continue
+            if self._looks_over_layer(name):
+                known_over.append(name)
+            else:
+                known_under.append(name)
+            used.add(name)
+
+        if not known_under and not known_over:
+            for name in self._tile_layer_names:
+                if name not in self.layer_surfaces:
+                    continue
+                if self._looks_over_layer(name):
+                    known_over.append(name)
+                else:
+                    known_under.append(name)
+        return tuple(known_under), tuple(known_over)
+
     def _build_layer_surface(self, tile_layer: pytmx.TiledTileLayer) -> pygame.Surface:
         surf = pygame.Surface((self.map_width, self.map_height), pygame.SRCALPHA)
         for x, y, gid in tile_layer:
@@ -116,9 +167,17 @@ class MapLoader:
 
     def _build_layer_surfaces(self) -> dict[str, pygame.Surface]:
         surfaces = {}
+        ordered_names: list[str] = []
         for layer_name in MAP_TILED_LAYER_ORDER:
             if layer_name == LAYER_COLLISIONS:
                 continue
+            if layer_name not in ordered_names:
+                ordered_names.append(layer_name)
+        for layer_name in self._tile_layer_names:
+            if layer_name not in ordered_names:
+                ordered_names.append(layer_name)
+
+        for layer_name in ordered_names:
             tile_layer = self._get_tile_layer(layer_name)
             if tile_layer is None:
                 continue

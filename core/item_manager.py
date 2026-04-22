@@ -25,7 +25,12 @@ SALAMI_FILE = "salami.png"
 # Coordenadas de tiles indicadas por el usuario para el item del cofre
 CHEST_REWARD_START_TILE = (15, 9)
 CHEST_REWARD_END_TILE = (15, 8)
-SPAWN_AREA_LAYER_CANDIDATES = ("inside-terrain", "inside the ring")
+SPAWN_AREA_LAYER_CANDIDATES = (
+    "inside-terrain",
+    "inside the ring",
+    "inside t-brain",
+    "inside_t_brain",
+)
 
 
 @dataclass
@@ -135,7 +140,7 @@ class ItemManager:
         self.active_potions: dict[str, Pickup] = {}
         self.potion_spawn_count = {potion_type: 0 for potion_type in self.enabled_potion_types}
         self.next_potion_spawn_ms = {
-            potion_type: now + self.rng.randint(1600, 3200)
+            potion_type: now + self._next_potion_delay_ms(potion_type, collected=False, initial=True)
             for potion_type in self.enabled_potion_types
         }
 
@@ -449,26 +454,48 @@ class ItemManager:
         if self.potion_spawn_count.get(potion_type, 0) >= MAX_POTION_SPAWNS_PER_TYPE:
             self.next_potion_spawn_ms[potion_type] = None
             return
-        if collected:
-            self.next_potion_spawn_ms[potion_type] = now_ms + self.rng.randint(2400, 5200)
-        else:
-            self.next_potion_spawn_ms[potion_type] = now_ms + self.rng.randint(1800, 4200)
+        self.next_potion_spawn_ms[potion_type] = now_ms + self._next_potion_delay_ms(
+            potion_type,
+            collected=collected,
+            initial=False,
+        )
 
     def _apply_potion(self, potion_type: str, player):
         if potion_type == "vida":
-            player.heal(24)
+            player.heal(28)
         elif potion_type == "escudo":
             player.shield = min(player.max_shield, player.shield + 22)
         elif potion_type == "poder":
-            player.energy = min(player.max_energy, player.energy + 30)
+            player.energy = min(player.max_energy, player.energy + 44)
 
     @staticmethod
     def _potion_lifetime_ms(potion_type: str) -> int:
         if potion_type == "vida":
-            return 13000
+            return 22000
         if potion_type == "escudo":
-            return 9000
-        return 8000
+            return 11800
+        return 10400
+
+    def _next_potion_delay_ms(self, potion_type: str, collected: bool, initial: bool = False) -> int:
+        # Vida aparece con mayor frecuencia que escudo/poder para sostener combates largos.
+        if potion_type == "vida":
+            if initial:
+                return self.rng.randint(520, 1120)
+            if collected:
+                return self.rng.randint(760, 1550)
+            return self.rng.randint(620, 1280)
+        if potion_type == "escudo":
+            if initial:
+                return self.rng.randint(1180, 2100)
+            if collected:
+                return self.rng.randint(1650, 2800)
+            return self.rng.randint(1340, 2420)
+        # poder
+        if initial:
+            return self.rng.randint(1380, 2360)
+        if collected:
+            return self.rng.randint(1900, 3050)
+        return self.rng.randint(1550, 2700)
 
     def get_active_potion_positions(self, potion_types: tuple[str, ...] = ("vida",)) -> list[tuple[str, pygame.Vector2]]:
         targets: list[tuple[str, pygame.Vector2]] = []

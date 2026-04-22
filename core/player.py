@@ -382,7 +382,7 @@ class Player(pygame.sprite.Sprite):
                 self._last_hazard_damage_ms = now
                 self.hazard_hits += 1
                 # Hongos: daño fuerte por contacto (50% de la vida máxima).
-                self.take_damage(int(self.max_health * 0.5))
+                self.take_true_damage(int(max(1, round(float(self.max_health) * 0.5))))
                 break
 
     # ── Animación ─────────────────────────────────────────────
@@ -442,9 +442,10 @@ class Player(pygame.sprite.Sprite):
             distance = float(to_enemy.length())
             if distance > reach:
                 continue
-            if distance > 1e-6:
+            close_contact = distance <= max(10.0, reach * 0.45)
+            if (not close_contact) and distance > 1e-6:
                 facing = to_enemy.normalize().dot(forward)
-                if facing < 0.12:
+                if facing < 0.05:
                     continue
             enemy.take_damage(PLAYER_ATTACK_DMGM)
 
@@ -481,7 +482,7 @@ class Player(pygame.sprite.Sprite):
             return False
 
         origin = pygame.math.Vector2(float(self.hitbox.centerx), float(self.hitbox.centery))
-        close_rect = self.hitbox.inflate(14, 14)
+        close_rect = self.hitbox.inflate(18, 18)
         close_radius = float(max(12, int(min(self.hitbox.width, self.hitbox.height) * 0.95)))
         forward = direction_vec.normalize() if direction_vec.length_squared() > 1e-6 else pygame.math.Vector2(0.0, 1.0)
         hit_any = False
@@ -495,7 +496,8 @@ class Player(pygame.sprite.Sprite):
                 continue
             if not enemy_hitbox.colliderect(close_rect):
                 continue
-            if dist > 1e-6 and to_enemy.normalize().dot(forward) < -0.15:
+            # En contacto muy cercano, siempre debe haber dano aunque no este "de frente".
+            if dist > (close_radius * 0.85) and dist > 1e-6 and to_enemy.normalize().dot(forward) < -0.35:
                 continue
             enemy.take_damage(PLAYER_ATTACK_DMGR)
             hit_any = True
@@ -568,6 +570,26 @@ class Player(pygame.sprite.Sprite):
         self._frame_index = 0
         self._anim_timer = 0
         
+        if self.health <= 0:
+            self.alive = False
+            self.state = "death"
+            self._frame_index = 0
+            self._anim_timer = 0
+
+    def take_true_damage(self, amount: int):
+        """Dano directo que ignora escudo/defensa (hazards del mapa)."""
+        if not self.alive:
+            return
+
+        final_damage = int(max(0, round(float(amount))))
+        if final_damage <= 0:
+            return
+
+        self.health = max(0, self.health - final_damage)
+        self.state = "hit"
+        self._frame_index = 0
+        self._anim_timer = 0
+
         if self.health <= 0:
             self.alive = False
             self.state = "death"

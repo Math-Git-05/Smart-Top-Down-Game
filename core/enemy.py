@@ -54,18 +54,20 @@ MONSTER_SPRITES_BY_TYPE = {
         os.path.join(MONSTER_BASE_DIR, "Grey Trex", "SpriteSheet.png"),
     ),
     "B": (
-        os.path.join(MONSTER_BASE_DIR, "Dragon", "SpriteSheet.png"),
-        os.path.join(MONSTER_BASE_DIR, "DragonYellow", "SpriteSheet.png"),
+        os.path.join(MONSTER_BASE_DIR, "Owl2", "Owl2.png"),
+        os.path.join(MONSTER_BASE_DIR, "Owl", "Owl.png"),
+        os.path.join(MONSTER_BASE_DIR, "Racoon", "SpriteSheet.png"),
         os.path.join(PIXEL_CRAWLER_MOBS_DIR, "Skeleton - Mage", "Run", "Run-Sheet.png"),
-        os.path.join(MONSTER_BASE_DIR, "Dragon", "SpriteSheet.png"),
     ),
     "C": (
-        os.path.join(MONSTER_BASE_DIR, "Grey Trex", "SpriteSheet.png"),
-        os.path.join(MONSTER_BASE_DIR, "TRex", "SpriteSheet.png"),
+        os.path.join(MONSTER_BASE_DIR, "Lizard2", "Lizard2.png"),
+        os.path.join(MONSTER_BASE_DIR, "Lizard", "Lizard.png"),
+        os.path.join(MONSTER_BASE_DIR, "Panda", "SpriteSheet.png"),
         os.path.join(PIXEL_CRAWLER_MOBS_DIR, "Skeleton - Rogue", "Run", "Run-Sheet.png"),
         os.path.join(ASSETS_DIR, "sprites", "gelatina_azul.png"),
     ),
 }
+_SHEET_FRAME_CACHE: dict[str, dict[str, list[pygame.Surface]]] = {}
 
 
 def _resolve_sprite_path(sprite_entry: str | tuple[str, ...]) -> str:
@@ -105,6 +107,10 @@ def _extract_frames(
 
 
 def _load_sheet_frames(sprite_path: str) -> dict[str, list[pygame.Surface]]:
+    cached = _SHEET_FRAME_CACHE.get(str(sprite_path))
+    if cached is not None:
+        return cached
+
     fallback_side = max(14, int(TILE_SIZE * 0.5))
     fallback = pygame.Surface((fallback_side, fallback_side), pygame.SRCALPHA)
     pygame.draw.circle(fallback, (220, 60, 60), (fallback_side // 2, fallback_side // 2), fallback_side // 2)
@@ -112,7 +118,9 @@ def _load_sheet_frames(sprite_path: str) -> dict[str, list[pygame.Surface]]:
     try:
         sheet = pygame.image.load(sprite_path).convert_alpha()
     except Exception:
-        return {k: [fallback.copy()] for k in ("down", "left", "right", "up")}
+        frames = {k: [fallback.copy()] for k in ("down", "left", "right", "up")}
+        _SHEET_FRAME_CACHE[str(sprite_path)] = frames
+        return frames
 
     sw, sh = sheet.get_size()
 
@@ -136,12 +144,14 @@ def _load_sheet_frames(sprite_path: str) -> dict[str, list[pygame.Surface]]:
     if rows == 1:
         run_frames = _extract_frames(sheet, 0, cols, frame_w, frame_h, fallback)[:6]
         left_frames = [pygame.transform.flip(frame, True, False) for frame in run_frames]
-        return {
+        frames = {
             "down": [frame.copy() for frame in run_frames],
             "up": [frame.copy() for frame in run_frames],
             "right": [frame.copy() for frame in run_frames],
             "left": left_frames,
         }
+        _SHEET_FRAME_CACHE[str(sprite_path)] = frames
+        return frames
 
     row_map = {"down": 0, "left": 1, "right": 2, "up": 3}
     frames: dict[str, list[pygame.Surface]] = {}
@@ -149,6 +159,7 @@ def _load_sheet_frames(sprite_path: str) -> dict[str, list[pygame.Surface]]:
     for direction, row in row_map.items():
         direction_frames = _extract_frames(sheet, row, cols, frame_w, frame_h, fallback)
         frames[direction] = direction_frames[:max_frames]
+    _SHEET_FRAME_CACHE[str(sprite_path)] = frames
     return frames
 
 
@@ -343,6 +354,7 @@ class BaseEnemy(pygame.sprite.Sprite):
         if direction.length_squared() <= 1e-9:
             return False
 
+        before = pygame.Vector2(float(self._pos.x), float(self._pos.y))
         self.direction = _direction_from_vector(direction)
 
         vx = direction.x * self.speed
@@ -361,7 +373,7 @@ class BaseEnemy(pygame.sprite.Sprite):
         self._pos.y = float(self.hitbox.centery)
 
         self.rect.center = self.hitbox.center
-        return True
+        return self._pos.distance_to(before) > 0.18
 
     def _move_toward(self, tx: float, ty: float, game_map) -> bool:
         return self._move_vector(pygame.Vector2(float(tx) - self._pos.x, float(ty) - self._pos.y), game_map)
@@ -442,11 +454,16 @@ class BaseEnemy(pygame.sprite.Sprite):
             return False
         vec = pygame.Vector2(float(player.hitbox.centerx) - self._pos.x, float(player.hitbox.centery) - self._pos.y)
         dist = float(vec.length())
+        player_center = pygame.Vector2(float(player.hitbox.centerx), float(player.hitbox.centery))
         point_blank = max(10.0, float(min(self.hitbox.width, self.hitbox.height)) * 0.70)
         if dist <= point_blank:
             self._ranged_cd = 50
             player.take_damage(self.ranged_damage)
             return True
+        if not self._has_direct_path(player_center, game_map):
+            # Si hay pared de por medio, no dispara "a traves" del obstaculo.
+            self._ranged_cd = 16
+            return False
         direction = _safe_normalize(vec)
         if direction.length_squared() <= 1e-9:
             return False
@@ -590,6 +607,18 @@ class BaseEnemy(pygame.sprite.Sprite):
                     self._move_vector(candidate, game_map)
                     after = self._pos.distance_to(target)
                     if after <= (before - 0.20):
+                        self._path_probe_failures = 0
+                        return True
+
+                # Fallback adicional: abanico angular cuando esta pegado a obstaculos.
+                for angle in (25.0, -25.0, 45.0, -45.0, 70.0, -70.0, 92.0, -92.0):
+                    candidate = to_target.rotate(angle)
+                    if candidate.length_squared() <= 1e-9:
+                        continue
+                    before = self._pos.distance_to(target)
+                    moved = self._move_vector(candidate, game_map)
+                    after = self._pos.distance_to(target)
+                    if moved and after <= (before - 0.08):
                         self._path_probe_failures = 0
                         return True
             return False

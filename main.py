@@ -31,7 +31,9 @@ from config.settings import (
     LAYER_COFRE_OPEN,
     LAYER_PUERTA_CLOSED,
     LAYER_PUERTA_OPEN,
-    MAP_FILE,
+    MAP_FILE_LEVEL_1,
+    MAP_FILE_LEVEL_2,
+    MAP_FILE_LEVEL_3,
     SCREEN_HEIGHT,
     SCREEN_TITLE,
     SCREEN_WIDTH,
@@ -41,12 +43,22 @@ from core.enemy import EnemyTypeA, EnemyTypeB, EnemyTypeC
 from core.item_manager import ItemManager
 from core.player import Player
 from infrastructure.map_loader import MapLoader
-from infrastructure.menu_screen import AgentMenuConfig, MenuResult, run_main_menu
+from infrastructure.menu_screen import (
+    ENEMY_SCENARIO_KEYS,
+    AgentMenuConfig,
+    MenuResult,
+    enemy_scenario_label,
+    run_main_menu,
+)
 from infrastructure.renderer import Camera, Renderer
 from infrastructure.sandbox_map import SandboxMap
+from systems.pathfinding import build_route_hint
 
 ENEMIES_TO_CLEAR_LEVEL_1 = 5
+ENEMIES_TO_CLEAR_LEVEL_2 = 8
+ENEMIES_TO_CLEAR_LEVEL_3 = 12
 WINNING_PROFILE_PATH = Path("training_reports") / "winning_agent_profile.json"
+TRAINING_MODELS_DIR = Path("training_reports") / "models"
 
 
 @dataclass(slots=True)
@@ -55,6 +67,7 @@ class SessionConfig:
     manual: bool
     use_agent: bool
     sandbox_enemy_count: int
+    enemy_scenario: str
     render: bool
     max_frames: int
     agent_genome: Genome | None = None
@@ -93,6 +106,119 @@ class RuntimeState:
     best_path_hint: tuple[tuple[int, int], ...] = ()
     best_genome_by_level: dict[str, Genome] | None = None
     best_path_hint_by_level: dict[str, tuple[tuple[int, int], ...]] | None = None
+    best_genome_by_context: dict[str, Genome] | None = None
+    best_path_hint_by_context: dict[str, tuple[tuple[int, int], ...]] | None = None
+
+
+@dataclass(slots=True)
+class ScenarioPlan:
+    enemy_count: int
+    forced_cycle: tuple[type, ...]
+    ally_agents: int
+    runtime_adjustable: bool
+
+
+LEVEL_ENTRY_POINT_HINTS: dict[str, tuple[tuple[int, int], ...]] = {
+    # Referencias pedidas: rango aproximado x=146, y=10..130
+    "level_2": (
+        (146, 24),
+        (146, 64),
+        (146, 100),
+        (146, 128),
+        (190, 120),
+    ),
+    # Referencias pedidas: rango aproximado x=303, y=10..70 (y tambien zona efectiva dentro del terreno).
+    "level_3": (
+        (303, 20),
+        (303, 42),
+        (303, 64),
+        (303, 132),
+        (303, 156),
+        (303, 176),
+        (330, 70),
+        (330, 166),
+        (360, 90),
+        (360, 188),
+    ),
+}
+
+
+def _safe_slug(value: str) -> str:
+    text = str(value or "").strip().lower()
+    out = "".join(ch if (ch.isalnum() or ch in ("_", "-")) else "_" for ch in text)
+    while "__" in out:
+        out = out.replace("__", "_")
+    out = out.strip("_")
+    return out or "default"
+
+
+def _context_key(level_id: str, enemy_scenario: str) -> str:
+    return f"{str(level_id)}|{str(enemy_scenario)}"
+
+
+def _default_enemy_count_for_level(level_id: str, sandbox_enemy_count: int) -> int:
+    if level_id == "level_1":
+        return ENEMIES_TO_CLEAR_LEVEL_1
+    if level_id == "level_2":
+        return ENEMIES_TO_CLEAR_LEVEL_2
+    if level_id == "level_3":
+        return ENEMIES_TO_CLEAR_LEVEL_3
+    return max(1, int(sandbox_enemy_count))
+
+
+def _resolve_scenario_plan(level_id: str, scenario: str, sandbox_enemy_count: int) -> ScenarioPlan:
+    code = scenario if scenario in set(ENEMY_SCENARIO_KEYS) else "mixed_vs_1_agent"
+    many_count = max(4, _default_enemy_count_for_level(level_id, sandbox_enemy_count))
+    can_adjust_runtime = level_id == "sandbox"
+
+    if code == "a_vs_1_agent":
+        return ScenarioPlan(enemy_count=1, forced_cycle=(EnemyTypeA,), ally_agents=1, runtime_adjustable=False)
+    if code == "b_vs_1_agent":
+        return ScenarioPlan(enemy_count=1, forced_cycle=(EnemyTypeB,), ally_agents=1, runtime_adjustable=False)
+    if code == "c_vs_1_agent":
+        return ScenarioPlan(enemy_count=1, forced_cycle=(EnemyTypeC,), ally_agents=1, runtime_adjustable=False)
+    if code == "human_vs_1_agent":
+        return ScenarioPlan(enemy_count=1, forced_cycle=(EnemyTypeC,), ally_agents=1, runtime_adjustable=False)
+    if code == "many_a_vs_1_agent":
+        return ScenarioPlan(enemy_count=many_count, forced_cycle=(EnemyTypeA,), ally_agents=1, runtime_adjustable=can_adjust_runtime)
+    if code == "many_b_vs_1_agent":
+        return ScenarioPlan(enemy_count=many_count, forced_cycle=(EnemyTypeB,), ally_agents=1, runtime_adjustable=can_adjust_runtime)
+    if code == "many_c_vs_1_agent":
+        return ScenarioPlan(enemy_count=many_count, forced_cycle=(EnemyTypeC,), ally_agents=1, runtime_adjustable=can_adjust_runtime)
+    if code == "mixed_vs_many_agents":
+        return ScenarioPlan(
+            enemy_count=many_count,
+            forced_cycle=(EnemyTypeA, EnemyTypeB, EnemyTypeC, EnemyTypeA, EnemyTypeB, EnemyTypeC),
+            ally_agents=3,
+            runtime_adjustable=can_adjust_runtime,
+        )
+    if code == "human_vs_many_agents":
+        return ScenarioPlan(
+            enemy_count=many_count,
+            forced_cycle=(EnemyTypeA, EnemyTypeB, EnemyTypeC, EnemyTypeA, EnemyTypeB, EnemyTypeC),
+            ally_agents=3,
+            runtime_adjustable=can_adjust_runtime,
+        )
+
+    # default: mixed_vs_1_agent (varios mixtos vs 1 agente).
+    return ScenarioPlan(
+        enemy_count=many_count,
+        forced_cycle=(EnemyTypeA, EnemyTypeB, EnemyTypeC),
+        ally_agents=1,
+        runtime_adjustable=can_adjust_runtime,
+    )
+
+
+def _is_level_available(level_id: str) -> bool:
+    if level_id == "sandbox":
+        return True
+    if level_id == "level_1":
+        return bool(MAP_FILE_LEVEL_1)
+    if level_id == "level_2":
+        return bool(MAP_FILE_LEVEL_2)
+    if level_id == "level_3":
+        return bool(MAP_FILE_LEVEL_3)
+    return False
 
 
 def _serialize_hint_points(hint: tuple[tuple[int, int], ...] | list[tuple[int, int]] | None) -> list[list[int]]:
@@ -157,6 +283,9 @@ def _deserialize_genome(payload) -> Genome | None:
 def _menu_cfg_to_payload(menu_cfg: AgentMenuConfig) -> dict:
     return {
         "sandbox_enemy_count": int(menu_cfg.sandbox_enemy_count),
+        "enemy_scenario": str(menu_cfg.enemy_scenario),
+        "ally_agents_enabled": bool(menu_cfg.ally_agents_enabled),
+        "ally_agents_count": int(menu_cfg.ally_agents_count),
         "training_level": str(menu_cfg.training_level),
         "benchmark_runs": int(menu_cfg.benchmark_runs),
         "population_size": int(menu_cfg.population_size),
@@ -172,6 +301,110 @@ def _menu_cfg_to_payload(menu_cfg: AgentMenuConfig) -> dict:
     }
 
 
+def _genome_fitness(genome: Genome | None) -> float:
+    if genome is None:
+        return -1e18
+    try:
+        return float(getattr(genome, "fitness", -1e18))
+    except Exception:
+        return -1e18
+
+
+def _save_training_model(
+    *,
+    level: str,
+    enemy_scenario: str,
+    menu_cfg: AgentMenuConfig,
+    best_genome: Genome | None,
+    path_hint: tuple[tuple[int, int], ...] | list[tuple[int, int]] | None,
+    validation_result: SessionResult | None,
+) -> str | None:
+    if best_genome is None:
+        return None
+
+    TRAINING_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    scenario_slug = _safe_slug(enemy_scenario)
+    model_path = TRAINING_MODELS_DIR / f"model_{level}_{scenario_slug}_{stamp}.json"
+
+    payload: dict = {
+        "version": 1,
+        "saved_at": datetime.now().isoformat(timespec="seconds"),
+        "level": str(level),
+        "enemy_scenario": str(enemy_scenario),
+        "context_key": _context_key(level, enemy_scenario),
+        "best_fitness": float(getattr(best_genome, "fitness", 0.0)),
+        "best_genome": _serialize_genome(best_genome),
+        "path_hint": _serialize_hint_points(tuple(path_hint or ())),
+        "config": _menu_cfg_to_payload(menu_cfg),
+    }
+    if validation_result is not None:
+        payload["validation"] = {
+            "success": bool(validation_result.success),
+            "reason": str(validation_result.reason),
+            "enemies_killed": int(validation_result.enemies_killed),
+            "total_enemies": int(validation_result.total_enemies),
+            "damage_dealt": float(validation_result.damage_dealt),
+            "elapsed_frames": int(validation_result.elapsed_frames),
+            "max_still_frames": int(validation_result.max_still_frames),
+            "oscillation_events": int(validation_result.oscillation_events),
+            "hazard_hits": int(validation_result.hazard_hits),
+        }
+
+    try:
+        with model_path.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=True, indent=2)
+    except Exception:
+        return None
+    return str(model_path)
+
+
+def _load_best_training_model(
+    level: str,
+    enemy_scenario: str,
+    *,
+    exact_scenario: bool = True,
+) -> tuple[Genome | None, tuple[tuple[int, int], ...], float]:
+    if not TRAINING_MODELS_DIR.exists():
+        return None, (), -1e18
+
+    best_genome: Genome | None = None
+    best_hint: tuple[tuple[int, int], ...] = ()
+    best_score = -1e18
+
+    for path in TRAINING_MODELS_DIR.glob("model_*.json"):
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+        except Exception:
+            continue
+
+        if str(payload.get("level", "")) != str(level):
+            continue
+        model_scenario = str(payload.get("enemy_scenario", "mixed_vs_1_agent"))
+        if exact_scenario and model_scenario != str(enemy_scenario):
+            continue
+
+        model_genome = _deserialize_genome(payload.get("best_genome"))
+        if model_genome is None:
+            model_genome = _deserialize_genome(payload.get("genome"))
+        if model_genome is None:
+            continue
+
+        try:
+            score = float(payload.get("best_fitness", getattr(model_genome, "fitness", -1e18)))
+        except Exception:
+            score = _genome_fitness(model_genome)
+        model_genome.fitness = score
+
+        if score > best_score:
+            best_score = score
+            best_genome = model_genome
+            best_hint = _deserialize_hint_points(payload.get("path_hint", ()))
+
+    return best_genome, best_hint, best_score
+
+
 def _menu_cfg_from_payload(payload, fallback: AgentMenuConfig) -> AgentMenuConfig:
     cfg = fallback.copy()
     if not isinstance(payload, dict):
@@ -179,6 +412,20 @@ def _menu_cfg_from_payload(payload, fallback: AgentMenuConfig) -> AgentMenuConfi
 
     try:
         cfg.sandbox_enemy_count = max(1, min(50, int(payload.get("sandbox_enemy_count", cfg.sandbox_enemy_count))))
+    except Exception:
+        pass
+    try:
+        cfg.enemy_scenario = str(payload.get("enemy_scenario", cfg.enemy_scenario))
+        if cfg.enemy_scenario not in set(ENEMY_SCENARIO_KEYS):
+            cfg.enemy_scenario = fallback.enemy_scenario
+    except Exception:
+        pass
+    try:
+        cfg.ally_agents_enabled = bool(payload.get("ally_agents_enabled", cfg.ally_agents_enabled))
+    except Exception:
+        pass
+    try:
+        cfg.ally_agents_count = max(0, min(8, int(payload.get("ally_agents_count", cfg.ally_agents_count))))
     except Exception:
         pass
     try:
@@ -243,6 +490,7 @@ def _register_runtime_winner(
     level_id: str,
     genome: Genome | None,
     path_hint: tuple[tuple[int, int], ...] | None = None,
+    enemy_scenario: str | None = None,
 ):
     if genome is None:
         return
@@ -250,11 +498,19 @@ def _register_runtime_winner(
         runtime_state.best_genome_by_level = {}
     if runtime_state.best_path_hint_by_level is None:
         runtime_state.best_path_hint_by_level = {}
+    if runtime_state.best_genome_by_context is None:
+        runtime_state.best_genome_by_context = {}
+    if runtime_state.best_path_hint_by_context is None:
+        runtime_state.best_path_hint_by_context = {}
 
     runtime_state.best_genome = genome.copy()
     runtime_state.best_path_hint = tuple(path_hint or ())
     runtime_state.best_genome_by_level[level_id] = genome.copy()
     runtime_state.best_path_hint_by_level[level_id] = tuple(path_hint or ())
+    if enemy_scenario:
+        ctx = _context_key(level_id, enemy_scenario)
+        runtime_state.best_genome_by_context[ctx] = genome.copy()
+        runtime_state.best_path_hint_by_context[ctx] = tuple(path_hint or ())
 
 
 def _save_winning_profile(
@@ -264,7 +520,7 @@ def _save_winning_profile(
     source: str,
 ) -> str | None:
     payload: dict = {
-        "version": 1,
+        "version": 2,
         "saved_at": datetime.now().isoformat(timespec="seconds"),
         "source": str(source),
         "level": str(level_id),
@@ -272,6 +528,7 @@ def _save_winning_profile(
         "best_genome": _serialize_genome(runtime_state.best_genome),
         "best_path_hint": _serialize_hint_points(runtime_state.best_path_hint),
         "by_level": {},
+        "by_context": {},
     }
 
     by_level_gen = runtime_state.best_genome_by_level or {}
@@ -288,6 +545,27 @@ def _save_winning_profile(
             "path_hint": _serialize_hint_points(hint),
         }
     payload["by_level"] = by_level_payload
+
+    by_ctx_gen = runtime_state.best_genome_by_context or {}
+    by_ctx_hint = runtime_state.best_path_hint_by_context or {}
+    by_ctx_payload: dict[str, dict] = {}
+    all_ctx = sorted(set(by_ctx_gen.keys()) | set(by_ctx_hint.keys()))
+    for ctx in all_ctx:
+        gen = by_ctx_gen.get(ctx)
+        hint = by_ctx_hint.get(ctx, ())
+        if gen is None and not hint:
+            continue
+        level_part = ""
+        scenario_part = ""
+        if "|" in ctx:
+            level_part, scenario_part = ctx.split("|", 1)
+        by_ctx_payload[str(ctx)] = {
+            "level": level_part,
+            "enemy_scenario": scenario_part,
+            "genome": _serialize_genome(gen),
+            "path_hint": _serialize_hint_points(hint),
+        }
+    payload["by_context"] = by_ctx_payload
 
     try:
         WINNING_PROFILE_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -331,6 +609,20 @@ def _load_winning_profile(
                 runtime_state.best_genome_by_level[str(level)] = level_gen
             if level_hint:
                 runtime_state.best_path_hint_by_level[str(level)] = level_hint
+
+    by_context_data = payload.get("by_context", {})
+    if isinstance(by_context_data, dict):
+        runtime_state.best_genome_by_context = {}
+        runtime_state.best_path_hint_by_context = {}
+        for ctx, ctx_payload in by_context_data.items():
+            if not isinstance(ctx_payload, dict):
+                continue
+            ctx_gen = _deserialize_genome(ctx_payload.get("genome"))
+            ctx_hint = _deserialize_hint_points(ctx_payload.get("path_hint", ()))
+            if ctx_gen is not None:
+                runtime_state.best_genome_by_context[str(ctx)] = ctx_gen
+            if ctx_hint:
+                runtime_state.best_path_hint_by_context[str(ctx)] = ctx_hint
     return loaded_cfg, str(WINNING_PROFILE_PATH)
 
 
@@ -370,8 +662,23 @@ def _prepare_level(level_id: str, sandbox_enemy_count: int):
         item_manager = ItemManager(game_map)
         return game_map, item_manager, spawn_x, spawn_y, exit_rect, enemy_count
 
-    if level_id == "level_1":
-        game_map = MapLoader(MAP_FILE)
+    level_map_by_id = {
+        "level_1": MAP_FILE_LEVEL_1,
+        "level_2": MAP_FILE_LEVEL_2,
+        "level_3": MAP_FILE_LEVEL_3,
+    }
+    level_default_enemy_count = {
+        "level_1": ENEMIES_TO_CLEAR_LEVEL_1,
+        "level_2": ENEMIES_TO_CLEAR_LEVEL_2,
+        "level_3": ENEMIES_TO_CLEAR_LEVEL_3,
+    }
+
+    if level_id in level_map_by_id:
+        map_path = level_map_by_id.get(level_id)
+        if not map_path:
+            raise RuntimeError(f"Mapa no disponible para {level_id}")
+
+        game_map = MapLoader(map_path)
         if LAYER_PUERTA_CLOSED in game_map.layer_visible:
             game_map.layer_visible[LAYER_PUERTA_CLOSED] = True
         if LAYER_PUERTA_OPEN in game_map.layer_visible:
@@ -381,15 +688,21 @@ def _prepare_level(level_id: str, sandbox_enemy_count: int):
         if LAYER_COFRE_OPEN in game_map.layer_visible:
             game_map.layer_visible[LAYER_COFRE_OPEN] = False
 
-        # Inicio en la entrada inferior; la intro lo mueve al punto jugable.
-        spawn_x = 24 * 32
-        spawn_y = 26 * 32
+        item_manager = ItemManager(game_map)
+        if level_id == "level_1":
+            # Nivel 1 mantiene entrada original.
+            spawn_x = 24 * 32
+            spawn_y = 26 * 32
+        else:
+            spawn_x, spawn_y = _resolve_level_entry_spawn(level_id, game_map, item_manager)
+
         exit_rect = _build_layer_trigger_rect(game_map, LAYER_PUERTA_CLOSED, inflate=26)
         if exit_rect is None:
-            exit_rect = pygame.Rect(spawn_x - 20, spawn_y - 120, 40, 60)
+            fallback_x = game_map.map_width // 2
+            fallback_y = int(game_map.map_height * 0.12)
+            exit_rect = pygame.Rect(fallback_x - 22, fallback_y - 22, 44, 44)
 
-        enemy_count = ENEMIES_TO_CLEAR_LEVEL_1
-        item_manager = ItemManager(game_map)
+        enemy_count = int(level_default_enemy_count.get(level_id, ENEMIES_TO_CLEAR_LEVEL_1))
         return game_map, item_manager, spawn_x, spawn_y, exit_rect, enemy_count
 
     raise RuntimeError(f"Nivel no implementado: {level_id}")
@@ -411,6 +724,61 @@ def _is_walkable_spawn(game_map, x: float, y: float) -> bool:
     if any(probe.colliderect(rect) for rect in (game_map.get_dynamic_collisions() if hasattr(game_map, "get_dynamic_collisions") else [])):
         return False
     return True
+
+
+def _is_spawn_visually_hidden(game_map, x: float, y: float) -> bool:
+    if game_map is None or not hasattr(game_map, "get_layers_at_world_point"):
+        return False
+    labels = game_map.get_layers_at_world_point(float(x), float(y), include_hidden=False)
+    if not labels:
+        return False
+    for label in labels:
+        text = str(label or "").lower()
+        if not text.startswith("tile:"):
+            continue
+        layer_name = text.split("tile:", 1)[1]
+        # Evita spawns "debajo" de capas superiores (arboles/overlays/arbustos/etc.).
+        if any(token in layer_name for token in ("over", "arbust", "arbol", "tree", "planta", "canopy")):
+            return True
+    return False
+
+
+def _resolve_level_entry_spawn(level_id: str, game_map, item_manager) -> tuple[int, int]:
+    walkables = list(getattr(item_manager, "walkable_points", []) or [])
+    if not walkables:
+        return game_map.map_width // 2, int(game_map.map_height * 0.82)
+
+    hints = LEVEL_ENTRY_POINT_HINTS.get(level_id, ())
+    chosen: tuple[int, int] | None = None
+    best_dist = float("inf")
+
+    for hx, hy in hints:
+        target = pygame.Vector2(float(hx), float(hy))
+        for wx, wy in walkables:
+            if _is_spawn_visually_hidden(game_map, float(wx), float(wy)):
+                continue
+            point = pygame.Vector2(float(wx), float(wy))
+            dist = point.distance_to(target)
+            if dist < best_dist:
+                best_dist = dist
+                chosen = (int(wx), int(wy))
+
+    if chosen is not None:
+        return chosen
+
+    # Fallback seguro por proximidad al tercio superior y evitando overlays.
+    fallback_target = pygame.Vector2(float(game_map.map_width) * 0.20, float(game_map.map_height) * 0.16)
+    visible_walkables = [
+        (int(wx), int(wy))
+        for wx, wy in walkables
+        if not _is_spawn_visually_hidden(game_map, float(wx), float(wy))
+    ]
+    pool = visible_walkables if visible_walkables else [(int(p[0]), int(p[1])) for p in walkables]
+    sx, sy = min(
+        pool,
+        key=lambda p: pygame.Vector2(float(p[0]), float(p[1])).distance_to(fallback_target),
+    )
+    return int(sx), int(sy)
 
 
 def _clamp_gene(value: float, gene_min: float = -2.0, gene_max: float = 2.0) -> float:
@@ -438,23 +806,77 @@ def _compress_trace_points(
 
 
 def _build_episode_route_hint(game_map, player: Player, enemy_group: pygame.sprite.Group) -> tuple[tuple[int, int], ...]:
-    return ()
+    if game_map is None or player is None:
+        return ()
+    if enemy_group is None or len(enemy_group) <= 0:
+        return ()
+
+    start_world = (int(player.hitbox.centerx), int(player.hitbox.centery))
+    goals: list[tuple[int, int]] = []
+    for enemy in enemy_group:
+        rect = getattr(enemy, "hitbox", getattr(enemy, "rect", None))
+        if rect is None:
+            continue
+        goals.append((int(rect.centerx), int(rect.centery)))
+    if not goals:
+        return ()
+
+    raw_hint = build_route_hint(game_map, start_world=start_world, goal_world_points=goals, max_points=320)
+    if raw_hint:
+        return _compress_trace_points(raw_hint, min_step=12.0, max_points=320)
+
+    # Fallback: orden determinista por cercania progresiva cuando A* no encuentra ruta.
+    ordered: list[tuple[int, int]] = []
+    remaining = list(goals)
+    cursor = pygame.Vector2(float(start_world[0]), float(start_world[1]))
+    while remaining and len(ordered) < 220:
+        nxt = min(
+            remaining,
+            key=lambda p: pygame.Vector2(float(p[0]), float(p[1])).distance_to(cursor),
+        )
+        ordered.append((int(nxt[0]), int(nxt[1])))
+        cursor = pygame.Vector2(float(nxt[0]), float(nxt[1]))
+        remaining.remove(nxt)
+    return _compress_trace_points(ordered, min_step=12.0, max_points=320)
 
 
-def _choose_training_seed(level: str, runtime_state: RuntimeState) -> tuple[Genome | None, tuple[tuple[int, int], ...]]:
+def _choose_training_seed(level: str, enemy_scenario: str, runtime_state: RuntimeState) -> tuple[Genome | None, tuple[tuple[int, int], ...]]:
+    chosen_genome: Genome | None = None
+    chosen_hint: tuple[tuple[int, int], ...] = ()
+    chosen_fit = -1e18
+
+    def _consider(genome: Genome | None, hint: tuple[tuple[int, int], ...] | list[tuple[int, int]] | None):
+        nonlocal chosen_genome, chosen_hint, chosen_fit
+        if genome is None:
+            return
+        fitness = _genome_fitness(genome)
+        if fitness > chosen_fit:
+            chosen_genome = genome.copy()
+            chosen_hint = tuple(hint or ())
+            chosen_fit = fitness
+
+    by_context_gen = runtime_state.best_genome_by_context or {}
+    by_context_hint = runtime_state.best_path_hint_by_context or {}
     by_level_genome = runtime_state.best_genome_by_level or {}
     by_level_hint = runtime_state.best_path_hint_by_level or {}
 
-    if level in by_level_genome:
-        return by_level_genome[level].copy(), tuple(by_level_hint.get(level, ()))
+    context = _context_key(level, enemy_scenario)
+    _consider(by_context_gen.get(context), tuple(by_context_hint.get(context, ())))
+    _consider(by_level_genome.get(level), tuple(by_level_hint.get(level, ())))
 
-    if level == "level_1" and "sandbox" in by_level_genome:
-        return by_level_genome["sandbox"].copy(), tuple(by_level_hint.get("sandbox", ()))
+    disk_exact_gen, disk_exact_hint, _ = _load_best_training_model(level, enemy_scenario, exact_scenario=True)
+    _consider(disk_exact_gen, disk_exact_hint)
+    if chosen_genome is None:
+        disk_level_gen, disk_level_hint, _ = _load_best_training_model(level, enemy_scenario, exact_scenario=False)
+        _consider(disk_level_gen, disk_level_hint)
 
-    if runtime_state.best_genome is not None:
-        return runtime_state.best_genome.copy(), tuple(getattr(runtime_state, "best_path_hint", ()))
+    if level == "level_1":
+        sandbox_ctx = _context_key("sandbox", enemy_scenario)
+        _consider(by_context_gen.get(sandbox_ctx), tuple(by_context_hint.get(sandbox_ctx, ())))
+        _consider(by_level_genome.get("sandbox"), tuple(by_level_hint.get("sandbox", ())))
 
-    return None, ()
+    _consider(runtime_state.best_genome, tuple(getattr(runtime_state, "best_path_hint", ())))
+    return chosen_genome, chosen_hint
 
 
 def _seed_population_around_genome(
@@ -498,6 +920,8 @@ def _spawn_near_player(player: Player, game_map, enemy_count: int) -> list[pygam
             if hasattr(game_map, "is_inside_play_area") and not game_map.is_inside_play_area(px, py):
                 continue
             if not _is_walkable_spawn(game_map, px, py):
+                continue
+            if _is_spawn_visually_hidden(game_map, px, py):
                 continue
             candidate = pygame.Vector2(px, py)
             if any(candidate.distance_to(other) < 70.0 for other in points):
@@ -553,6 +977,8 @@ def _stable_enemy_spawn_points(
             continue
         if not _is_walkable_spawn(game_map, point.x, point.y):
             continue
+        if _is_spawn_visually_hidden(game_map, point.x, point.y):
+            continue
         filtered.append(point)
 
     if not filtered:
@@ -607,6 +1033,7 @@ def _spawn_enemies(
     level_id: str = "",
     prefer_near_player: bool = False,
     existing_points: list[pygame.Vector2] | None = None,
+    forced_cycle: tuple[type, ...] | list[type] | None = None,
 ):
     spawn_points = []
     forced_enemy_classes: list[type | None] = []
@@ -620,6 +1047,8 @@ def _spawn_enemies(
                 continue
             if not _is_walkable_spawn(game_map, candidate.x, candidate.y):
                 continue
+            if _is_spawn_visually_hidden(game_map, candidate.x, candidate.y):
+                continue
             occupied = spawn_points
             if existing_points:
                 occupied = spawn_points + existing_points
@@ -628,7 +1057,7 @@ def _spawn_enemies(
             spawn_points.append(candidate)
             forced_enemy_classes.append(forced_cls)
 
-    if level_id == "level_1" and not prefer_near_player and not existing_points:
+    if level_id == "level_1" and not prefer_near_player and not existing_points and not forced_cycle:
         # Fixed anchors for reproducible level-1 training.
         # The previous top-right spawn was under a tree; moved to x~590 and set as moving enemy.
         level_1_fixed_spawns: list[tuple[pygame.Vector2, type]] = [
@@ -675,9 +1104,15 @@ def _spawn_enemies(
         )
 
     enemy_classes = [EnemyTypeA, EnemyTypeB, EnemyTypeC, EnemyTypeA, EnemyTypeB, EnemyTypeC]
+    cycle_classes = tuple(forced_cycle or ())
     for idx, pos in enumerate(spawn_points):
         forced_cls = forced_enemy_classes[idx] if idx < len(forced_enemy_classes) else None
-        enemy_cls = forced_cls if forced_cls is not None else enemy_classes[idx % len(enemy_classes)]
+        if forced_cls is not None:
+            enemy_cls = forced_cls
+        elif cycle_classes:
+            enemy_cls = cycle_classes[idx % len(cycle_classes)]
+        else:
+            enemy_cls = enemy_classes[idx % len(enemy_classes)]
         enemy_cls(
             x=int(pos.x),
             y=int(pos.y),
@@ -695,20 +1130,27 @@ def _draw_agent_overlay(screen: pygame.Surface, cfg: SessionConfig, genome: Geno
     line2 = font.render(f"Tiempo: {elapsed_ms / 1000.0:.1f}s", True, (200, 220, 235))
     screen.blit(line1, (panel.x + 10, panel.y + 10))
     screen.blit(line2, (panel.x + 10, panel.y + 30))
+    scenario_line = font.render(
+        f"Escenario: {enemy_scenario_label(cfg.enemy_scenario, short=True)}",
+        True,
+        (212, 224, 198),
+    )
+    screen.blit(scenario_line, (panel.x + 10, panel.y + 50))
+    pop_y = panel.y + 68
 
     line3 = font.render(
         f"Poblacion: {max(0, int(cfg.population_preview))} | Generaciones: {max(1, int(cfg.generation_preview))}",
         True,
         (220, 214, 186),
     )
-    screen.blit(line3, (panel.x + 10, panel.y + 50))
+    screen.blit(line3, (panel.x + 10, pop_y))
     if cfg.selection_preview or cfg.crossover_preview:
         line_sel = font.render(
             f"Seleccion: {cfg.selection_preview or '-'} | Cruce: {cfg.crossover_preview or '-'}",
             True,
             (206, 224, 178),
         )
-        screen.blit(line_sel, (panel.x + 10, panel.y + 72))
+        screen.blit(line_sel, (panel.x + 10, pop_y + 22))
 
     if genome is None:
         return
@@ -726,7 +1168,7 @@ def _draw_agent_overlay(screen: pygame.Surface, cfg: SessionConfig, genome: Geno
         True,
         (255, 214, 128),
     )
-    screen.blit(line4, (panel.x + 10, panel.y + 92))
+    screen.blit(line4, (panel.x + 10, pop_y + 42))
 
     pop = max(0, int(cfg.population_preview))
     preview = min(pop, 30)
@@ -735,7 +1177,7 @@ def _draw_agent_overlay(screen: pygame.Surface, cfg: SessionConfig, genome: Geno
     cols = 10
     dot_size = 8
     start_x = panel.x + 12
-    start_y = panel.y + 114
+    start_y = pop_y + 64
     for idx in range(preview):
         color = pygame.Color(0)
         color.hsva = ((idx * 33) % 360, 65, 96, 100)
@@ -895,6 +1337,15 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
 
     map_w = game_map.map_width
     map_h = game_map.map_height
+    scenario_plan = _resolve_scenario_plan(cfg.level_id, cfg.enemy_scenario, cfg.sandbox_enemy_count)
+    scenario_forced_cycle: tuple[type, ...] | None = scenario_plan.forced_cycle
+    scenario_runtime_adjustable = bool(scenario_plan.runtime_adjustable)
+    scenario_allies_enabled = cfg.enemy_scenario in {"mixed_vs_many_agents", "human_vs_many_agents"}
+    if scenario_allies_enabled and bool(getattr(cfg, "ally_agents_enabled", True)):
+        ally_agent_count = max(1, 1 + int(max(0, getattr(cfg, "ally_agents_count", 2))))
+    else:
+        ally_agent_count = 1
+    enemy_count = int(scenario_plan.enemy_count)
 
     if cfg.use_agent and not cfg.render:
         # Deterministic sessions for training/benchmark reproducibility.
@@ -919,6 +1370,25 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
         collision_mask=collision_mask,
     )
     sandbox_agent_assists = bool(cfg.use_agent and cfg.level_id == "sandbox" and cfg.render)
+    team_assists = bool(cfg.render and ally_agent_count > 1)
+    ally_visuals: list[dict] = []
+    ally_shot_traces: list[dict] = []
+    if team_assists:
+        ally_colors = [
+            (126, 226, 255),
+            (255, 196, 120),
+            (180, 255, 164),
+            (220, 170, 255),
+            (255, 146, 192),
+        ]
+        for idx in range(max(0, ally_agent_count - 1)):
+            ally_visuals.append(
+                {
+                    "pos": pygame.Vector2(float(player.hitbox.centerx), float(player.hitbox.centery)),
+                    "color": ally_colors[idx % len(ally_colors)],
+                    "phase": float(idx) * 0.92,
+                }
+            )
     if sandbox_agent_assists:
         # Slight assistance so training/benchmark sessions are stable and reproducible.
         player.max_health = max(player.max_health, 170)
@@ -940,6 +1410,7 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
         enemy_count,
         level_id=cfg.level_id,
         prefer_near_player=sandbox_agent_assists,
+        forced_cycle=scenario_forced_cycle,
     )
     if sandbox_agent_assists:
         for enemy in enemy_group:
@@ -951,18 +1422,28 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
     total_enemies = len(enemy_group)
     objective_complete = total_enemies == 0
     enemies_killed = max(0, total_enemies - len(enemy_group))
-    episode_route_hint: tuple[tuple[int, int], ...] = ()
+    episode_route_hint: tuple[tuple[int, int], ...] = _build_episode_route_hint(game_map, player, enemy_group)
 
     start_ms = pygame.time.get_ticks()
     unlocked_message_until_ms = 0
     reason = "quit"
     success = False
     objective_completed_frame: int | None = 0 if objective_complete else None
-    intro_active = cfg.level_id == "level_1"
+    intro_active = cfg.level_id in ("level_1", "level_2", "level_3")
     intro_start_ms = start_ms
     intro_fade_duration_ms = 1300
-    intro_target_y = 21 * 32
+    intro_target = pygame.Vector2(float(player._pos.x), float(player._pos.y))
     intro_speed = 1.0
+    intro_direction_vec = pygame.Vector2(0.0, -1.0)
+    if cfg.level_id == "level_1":
+        intro_target = pygame.Vector2(float(player._pos.x), float(21 * 32))
+        intro_direction_vec = pygame.Vector2(0.0, -1.0)
+    elif cfg.level_id in ("level_2", "level_3"):
+        intro_speed = 1.2
+        intro_direction_vec = pygame.Vector2(0.0, 1.0)
+        player._pos.y = max(4.0, float(intro_target.y) - 72.0)
+        player.hitbox.centery = int(player._pos.y)
+        player.rect.center = player.hitbox.center
     debug_overlay = False
     hover_world = (int(player.hitbox.centerx), int(player.hitbox.centery))
     hover_layers: list[str] = []
@@ -1000,6 +1481,8 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
         nonlocal objective_complete, objective_completed_frame, initial_total_enemy_hp, total_enemies
         if cfg.level_id != "sandbox":
             return
+        if not scenario_runtime_adjustable:
+            return
         current = len(enemy_group)
         if sandbox_enemy_target > current:
             add_count = sandbox_enemy_target - current
@@ -1013,6 +1496,7 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
                 level_id=cfg.level_id,
                 prefer_near_player=False,
                 existing_points=_current_enemy_centers(),
+                forced_cycle=scenario_forced_cycle,
             )
             if sandbox_agent_assists:
                 for enemy in list(enemy_group)[current:]:
@@ -1064,13 +1548,17 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
     else:
         _set_door_open(False)
 
-    chosen_hint: tuple[tuple[int, int], ...] = ()
+    chosen_hint: tuple[tuple[int, int], ...] = tuple(cfg.path_hint or ())
+    if not chosen_hint:
+        chosen_hint = tuple(episode_route_hint)
 
     agent = (
-        AutoPlayerAgent.from_genome(cfg.agent_genome, seed=17, path_hint=None)
+        AutoPlayerAgent.from_genome(cfg.agent_genome, seed=17, path_hint=chosen_hint)
         if cfg.use_agent
         else None
     )
+    if agent is not None and chosen_hint:
+        agent.set_path_hint(chosen_hint, player_center=(int(player.hitbox.centerx), int(player.hitbox.centery)))
 
     frame_count = 0
     running = True
@@ -1118,10 +1606,10 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
                             pygame.mouse.get_pos(),
                         )
                 elif cfg.level_id == "sandbox":
-                    if event.key in (pygame.K_MINUS, pygame.K_KP_MINUS, pygame.K_LEFTBRACKET):
+                    if scenario_runtime_adjustable and event.key in (pygame.K_MINUS, pygame.K_KP_MINUS, pygame.K_LEFTBRACKET):
                         sandbox_enemy_target = max(1, sandbox_enemy_target - 1)
                         _sync_sandbox_enemy_count()
-                    elif event.key in (pygame.K_EQUALS, pygame.K_KP_PLUS, pygame.K_RIGHTBRACKET):
+                    elif scenario_runtime_adjustable and event.key in (pygame.K_EQUALS, pygame.K_KP_PLUS, pygame.K_RIGHTBRACKET):
                         sandbox_enemy_target = min(50, sandbox_enemy_target + 1)
                         _sync_sandbox_enemy_count()
             if (
@@ -1174,18 +1662,25 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
 
         if (not paused) and intro_active:
             player.state = "walk"
-            player.direction = "up"
-            player._pos.y -= intro_speed
-            player.hitbox.centery = int(player._pos.y)
-            player.rect.center = player.hitbox.center
-            if player._pos.y <= intro_target_y:
-                player._pos.y = float(intro_target_y)
-                player.hitbox.centery = intro_target_y
+            player.direction = "up" if intro_direction_vec.y < 0 else "down"
+            to_target = intro_target - pygame.Vector2(float(player._pos.x), float(player._pos.y))
+            if to_target.length() <= max(0.8, intro_speed + 0.25):
+                player._pos.x = float(intro_target.x)
+                player._pos.y = float(intro_target.y)
+                player.hitbox.centerx = int(player._pos.x)
+                player.hitbox.centery = int(player._pos.y)
                 player.rect.center = player.hitbox.center
                 player.state = "idle"
                 intro_active = False
                 if not objective_complete:
                     _set_door_open(False)
+            else:
+                step = to_target.normalize() * float(intro_speed)
+                player._pos.x += float(step.x)
+                player._pos.y += float(step.y)
+                player.hitbox.centerx = int(player._pos.x)
+                player.hitbox.centery = int(player._pos.y)
+                player.rect.center = player.hitbox.center
             player._update_animation()
         elif not paused:
             if cfg.use_agent and agent is not None:
@@ -1269,13 +1764,48 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
             max_still_frames = max(max_still_frames, current_still_frames)
             last_player_center = new_player_center
 
-            if sandbox_agent_assists and enemy_group and frame_count % 70 == 0:
-                # Small assist shot so the agent can progress while navigation is being tuned.
+            assist_period = max(26, 76 - (max(1, ally_agent_count) - 1) * 10)
+            assist_damage = 8 + max(0, ally_agent_count - 1) * 3
+            if sandbox_agent_assists and enemy_group and frame_count % assist_period == 0:
                 nearest_enemy = min(
                     enemy_group,
                     key=lambda e: pygame.Vector2(e.rect.center).distance_to(pygame.Vector2(player.rect.center)),
                 )
-                nearest_enemy.take_damage(42)
+                nearest_enemy.take_damage(max(4, int(assist_damage)))
+
+            if team_assists:
+                center = pygame.Vector2(float(player.hitbox.centerx), float(player.hitbox.centery))
+                for idx, ally in enumerate(ally_visuals):
+                    phase = float(ally.get("phase", 0.0))
+                    radius = 28.0 + (idx % 3) * 9.0
+                    spin = (frame_count * 0.030) + phase
+                    desired = center + pygame.Vector2(math.cos(spin) * radius, math.sin(spin) * radius)
+                    ally_pos: pygame.Vector2 = ally["pos"]
+                    ally_pos += (desired - ally_pos) * 0.16
+                    ally["pos"] = ally_pos
+
+                    if not enemy_group:
+                        continue
+                    fire_period = max(16, assist_period - 8)
+                    if frame_count % fire_period != (idx * 5) % fire_period:
+                        continue
+                    nearest_enemy = min(
+                        enemy_group,
+                        key=lambda e: pygame.Vector2(float(e.rect.centerx), float(e.rect.centery)).distance_to(ally_pos),
+                    )
+                    enemy_pos = pygame.Vector2(float(nearest_enemy.rect.centerx), float(nearest_enemy.rect.centery))
+                    if ally_pos.distance_to(enemy_pos) > 300.0:
+                        continue
+                    # Soporte ligero: nunca instant-kill.
+                    nearest_enemy.take_damage(max(2, int(assist_damage * 0.45)))
+                    ally_shot_traces.append(
+                        {
+                            "start": (float(ally_pos.x), float(ally_pos.y)),
+                            "end": (float(enemy_pos.x), float(enemy_pos.y)),
+                            "ttl": 8,
+                            "color": ally.get("color", (140, 220, 255)),
+                        }
+                    )
 
             enemies_remaining = len(enemy_group)
             enemies_killed = max(0, total_enemies - enemies_remaining)
@@ -1301,8 +1831,9 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
                     player.rect.center = player.hitbox.center
 
             if not intro_active and objective_complete:
-                if cfg.use_agent:
+                if cfg.use_agent or cfg.level_id == "level_3":
                     # En modo IA (demo/entrenamiento/benchmark), completar objetivo = fin inmediato.
+                    # Nivel 3 tambien cierra al limpiar enemigos (manual o IA).
                     running = False
                     reason = "completed"
                     success = True
@@ -1332,6 +1863,30 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
                 item_manager.draw_world(renderer.screen, camera)
 
             renderer.draw_sprites(all_sprites)
+            if team_assists and ally_visuals:
+                for trace in list(ally_shot_traces):
+                    trace["ttl"] = int(trace.get("ttl", 0)) - 1
+                    if int(trace["ttl"]) <= 0:
+                        ally_shot_traces.remove(trace)
+                        continue
+                    sx, sy = trace.get("start", (0.0, 0.0))
+                    ex, ey = trace.get("end", (0.0, 0.0))
+                    color = trace.get("color", (140, 220, 255))
+                    pygame.draw.line(
+                        renderer.screen,
+                        color,
+                        (int(sx - camera.offset_x), int(sy - camera.offset_y)),
+                        (int(ex - camera.offset_x), int(ey - camera.offset_y)),
+                        2,
+                    )
+                for idx, ally in enumerate(ally_visuals):
+                    ally_pos: pygame.Vector2 = ally["pos"]
+                    draw_x = int(ally_pos.x - camera.offset_x)
+                    draw_y = int(ally_pos.y - camera.offset_y)
+                    tint = ally.get("color", (126, 226, 255))
+                    pygame.draw.circle(renderer.screen, (18, 28, 34), (draw_x, draw_y), 9)
+                    pygame.draw.circle(renderer.screen, tint, (draw_x, draw_y), 8, width=2)
+                    pygame.draw.circle(renderer.screen, tint, (draw_x, draw_y), 3)
             _draw_enemy_health_bars(renderer.screen, camera, enemy_group)
 
             for bullet in bullet_group:
@@ -1424,6 +1979,13 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
                     mode_chip_y + (mode_chip_h // 2) - (mode_surface.get_height() // 2),
                 ),
             )
+            if team_assists:
+                allies_surface = pygame.font.SysFont("consolas", 16, bold=True).render(
+                    f"Aliados activos: {len(ally_visuals)}",
+                    True,
+                    (186, 230, 255),
+                )
+                screen.blit(allies_surface, (mode_chip_x, mode_chip_y + mode_chip_h + 4))
 
             pause_fill = (98, 120, 136) if paused else (70, 92, 106)
             pygame.draw.rect(screen, pause_fill, pause_button_rect, border_radius=7)
@@ -1438,8 +2000,9 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
             )
 
             if cfg.level_id == "sandbox":
+                adjust_hint = "[+/- o [ ]]" if scenario_runtime_adjustable else "fijo"
                 sandbox_surface = objective_font.render(
-                    f"Sandbox enemigos: {len(enemy_group)}/{sandbox_enemy_target}   [+/- o [ ]]",
+                    f"Sandbox: {enemy_scenario_label(cfg.enemy_scenario, short=True)} | enemigos {len(enemy_group)}/{sandbox_enemy_target}   {adjust_hint}",
                     True,
                     (202, 228, 244),
                 )
@@ -1755,13 +2318,13 @@ def _draw_training_progress(
 
 def train_agent(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: AgentMenuConfig, runtime_state: RuntimeState):
     level = menu_cfg.training_level
-    if level in ("level_2", "level_3"):
+    if not _is_level_available(level):
         return {
             "title": "Entrenamiento IA",
             "lines": [
                 f"Nivel solicitado: {level}",
-                "Estado: pendiente (nivel aun no listo)",
-                "Tip: usa Sandbox o Nivel 1 para arrancar el entrenamiento.",
+                "Estado: mapa no disponible aun",
+                "Tip: agrega el .tmx del nivel y se habilita automaticamente.",
             ],
         }
 
@@ -1772,10 +2335,11 @@ def train_agent(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Agen
         selection_mode=menu_cfg.selection_mode,
         mutation_rate=menu_cfg.mutation_rate,
         mutation_scale=menu_cfg.mutation_scale,
+        elitism_ratio=0.35,
     )
 
     rng = random.Random(19)
-    seed_genome, seed_hint = _choose_training_seed(level, runtime_state)
+    seed_genome, seed_hint = _choose_training_seed(level, menu_cfg.enemy_scenario, runtime_state)
     population = create_population(ga_cfg, rng)
     _seed_population_around_genome(population, seed_genome, ga_cfg, rng)
 
@@ -1789,8 +2353,18 @@ def train_agent(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Agen
     best_hint_damage = -1.0
     best_hint_stuck = 10**9
     last_result: SessionResult | None = None
-    train_max_frames = 12000 if level == "level_1" else 7600
-    validation_max_frames = 14000 if level == "level_1" else 9000
+    if level == "level_1":
+        train_max_frames = 12000
+        validation_max_frames = 14000
+    elif level == "level_2":
+        train_max_frames = 14000
+        validation_max_frames = 17000
+    elif level == "level_3":
+        train_max_frames = 16000
+        validation_max_frames = 19000
+    else:
+        train_max_frames = 10000
+        validation_max_frames = 12000
 
     for generation in range(ga_cfg.generations):
         success_count = 0
@@ -1830,10 +2404,11 @@ def train_agent(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Agen
                     manual=False,
                     use_agent=True,
                     sandbox_enemy_count=menu_cfg.sandbox_enemy_count,
+                    enemy_scenario=menu_cfg.enemy_scenario,
                     render=False,
                     max_frames=train_max_frames,
                     agent_genome=effective_genome,
-                    path_hint=None,
+                    path_hint=tuple(generation_hint or best_overall_trace),
                 ),
             )
             genome.fitness = _fitness_from_result(result)
@@ -1902,6 +2477,12 @@ def train_agent(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Agen
             # Persistimos el mejor global sin mutar para estabilizar aprendizaje entre generaciones.
             population[0] = best_overall.copy()
             _apply_level_gene_freeze(population[0], level, generation + 1, ga_cfg.generations)
+            if len(population) > 1:
+                population[1] = ranked[0].copy()
+                _apply_level_gene_freeze(population[1], level, generation + 1, ga_cfg.generations)
+            if len(population) > 2 and len(ranked) > 1:
+                population[2] = ranked[1].copy()
+                _apply_level_gene_freeze(population[2], level, generation + 1, ga_cfg.generations)
 
     runtime_state.best_genome = _merge_weights(best_overall, menu_cfg)
     runtime_state.best_path_hint = tuple(best_overall_trace)
@@ -1909,8 +2490,15 @@ def train_agent(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Agen
         runtime_state.best_genome_by_level = {}
     if runtime_state.best_path_hint_by_level is None:
         runtime_state.best_path_hint_by_level = {}
+    if runtime_state.best_genome_by_context is None:
+        runtime_state.best_genome_by_context = {}
+    if runtime_state.best_path_hint_by_context is None:
+        runtime_state.best_path_hint_by_context = {}
     runtime_state.best_genome_by_level[level] = runtime_state.best_genome.copy()
     runtime_state.best_path_hint_by_level[level] = tuple(best_overall_trace)
+    context = _context_key(level, menu_cfg.enemy_scenario)
+    runtime_state.best_genome_by_context[context] = runtime_state.best_genome.copy()
+    runtime_state.best_path_hint_by_context[context] = tuple(best_overall_trace)
 
     validation = run_game_session(
         screen,
@@ -1920,10 +2508,11 @@ def train_agent(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Agen
             manual=False,
             use_agent=True,
             sandbox_enemy_count=menu_cfg.sandbox_enemy_count,
+            enemy_scenario=menu_cfg.enemy_scenario,
             render=False,
             max_frames=validation_max_frames,
             agent_genome=runtime_state.best_genome,
-            path_hint=None,
+            path_hint=tuple(best_overall_trace),
         ),
     )
 
@@ -1946,6 +2535,19 @@ def train_agent(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Agen
         history_lines.append(f"TXT guardado: {report_path}")
     else:
         history_lines.append("TXT guardado: error al exportar reporte")
+
+    model_path = _save_training_model(
+        level=level,
+        enemy_scenario=menu_cfg.enemy_scenario,
+        menu_cfg=menu_cfg,
+        best_genome=runtime_state.best_genome,
+        path_hint=tuple(best_overall_trace),
+        validation_result=validation,
+    )
+    if model_path is not None:
+        history_lines.append(f"Modelo guardado: {model_path}")
+    else:
+        history_lines.append("Modelo guardado: error al exportar modelo")
 
     if validation.success:
         profile_path = _save_winning_profile(
@@ -1980,7 +2582,7 @@ def _save_training_txt(
     report_dir = Path("training_reports")
     report_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_path = report_dir / f"training_{level}_{stamp}.txt"
+    report_path = report_dir / f"training_{level}_{_safe_slug(menu_cfg.enemy_scenario)}_{stamp}.txt"
 
     try:
         with report_path.open("w", encoding="utf-8") as handle:
@@ -1993,7 +2595,8 @@ def _save_training_txt(
                 f"seleccion={menu_cfg.selection_mode}, cruce={menu_cfg.crossover_mode}, "
                 f"mutacion={menu_cfg.mutation_rate:.2f}x{menu_cfg.mutation_scale:.2f}, "
                 f"pesos(a/s/o/p)={menu_cfg.weight_aggression:.2f}/{menu_cfg.weight_survival:.2f}/"
-                f"{menu_cfg.weight_objective:.2f}/{menu_cfg.weight_pathing:.2f}\n"
+                f"{menu_cfg.weight_objective:.2f}/{menu_cfg.weight_pathing:.2f}, "
+                f"escenario={menu_cfg.enemy_scenario}\n"
             )
             handle.write("\nResumen:\n")
             for line in summary_lines:
@@ -2040,9 +2643,9 @@ def run_benchmark(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Ag
     episodes = max(1, int(menu_cfg.benchmark_runs))
 
     for level in levels:
-        if level in ("level_2", "level_3"):
-            lines.append(f"{level}: pendiente (sin mapa definitivo)")
-            detail_lines.append(f"{level}: sin ejecucion (nivel pendiente)")
+        if not _is_level_available(level):
+            lines.append(f"{level}: pendiente (sin mapa disponible)")
+            detail_lines.append(f"{level}: sin ejecucion (nivel sin .tmx)")
             continue
 
         wins = 0
@@ -2054,11 +2657,11 @@ def run_benchmark(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Ag
         total_osc = 0
         total_hazards = 0
 
+        level_seed_genome, level_seed_hint = _choose_training_seed(level, menu_cfg.enemy_scenario, runtime_state)
+        level_genome = level_seed_genome if level_seed_genome is not None else base_genome
+        level_hint = tuple(level_seed_hint or base_path_hint)
+
         for run_idx in range(episodes):
-            by_level_gen = runtime_state.best_genome_by_level or {}
-            by_level_hint = runtime_state.best_path_hint_by_level or {}
-            level_genome = by_level_gen.get(level, base_genome)
-            level_hint = tuple(by_level_hint.get(level, base_path_hint))
             result = run_game_session(
                 screen,
                 clock,
@@ -2067,10 +2670,11 @@ def run_benchmark(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Ag
                     manual=False,
                     use_agent=True,
                     sandbox_enemy_count=menu_cfg.sandbox_enemy_count,
+                    enemy_scenario=menu_cfg.enemy_scenario,
                     render=False,
-                    max_frames=14000 if level == "level_1" else 9000,
+                    max_frames=14000 if level == "level_1" else (17000 if level == "level_2" else 19000),
                     agent_genome=level_genome,
-                    path_hint=None,
+                    path_hint=level_hint,
                 ),
             )
             wins += 1 if result.success else 0
@@ -2116,10 +2720,9 @@ def _run_manual_or_agent_session(screen, clock, menu_cfg: AgentMenuConfig, runti
     genome = None
     path_hint = None
     if use_agent:
-        by_level_gen = runtime_state.best_genome_by_level or {}
-        by_level_hint = runtime_state.best_path_hint_by_level or {}
-        genome = by_level_gen.get(level_id, runtime_state.best_genome)
-        path_hint = tuple(by_level_hint.get(level_id, getattr(runtime_state, "best_path_hint", ())))
+        seed_genome, seed_hint = _choose_training_seed(level_id, menu_cfg.enemy_scenario, runtime_state)
+        genome = seed_genome if seed_genome is not None else runtime_state.best_genome
+        path_hint = tuple(seed_hint or getattr(runtime_state, "best_path_hint", ()))
     result = run_game_session(
         screen,
         clock,
@@ -2128,10 +2731,11 @@ def _run_manual_or_agent_session(screen, clock, menu_cfg: AgentMenuConfig, runti
             manual=not use_agent,
             use_agent=use_agent,
             sandbox_enemy_count=menu_cfg.sandbox_enemy_count,
+            enemy_scenario=menu_cfg.enemy_scenario,
             render=True,
             max_frames=20000,
             agent_genome=genome,
-            path_hint=None,
+            path_hint=path_hint,
             backoffice_overlay=backoffice_overlay,
             population_preview=menu_cfg.population_size,
             generation_preview=menu_cfg.generations,
@@ -2143,11 +2747,13 @@ def _run_manual_or_agent_session(screen, clock, menu_cfg: AgentMenuConfig, runti
     saved_profile_path: str | None = None
     if use_agent and result.success:
         winner_genome = genome if genome is not None else runtime_state.best_genome
+        winner_hint = tuple(result.route_hint or path_hint or ())
         _register_runtime_winner(
             runtime_state=runtime_state,
             level_id=level_id,
             genome=winner_genome,
-            path_hint=tuple(path_hint or ()),
+            path_hint=winner_hint,
+            enemy_scenario=menu_cfg.enemy_scenario,
         )
         saved_profile_path = _save_winning_profile(
             runtime_state=runtime_state,
@@ -2166,6 +2772,7 @@ def _run_manual_or_agent_session(screen, clock, menu_cfg: AgentMenuConfig, runti
         f"Golpes por hongos: {result.hazard_hits}",
         f"Tiempo: {result.elapsed_ms / 1000.0:.1f}s ({result.elapsed_frames} frames)",
     ]
+    lines.insert(1, f"Escenario: {enemy_scenario_label(menu_cfg.enemy_scenario, short=False)}")
     if saved_profile_path is not None:
         lines.append(f"Preset ganador guardado: {saved_profile_path}")
     _show_info_screen(screen, clock, "Resultado", lines)
@@ -2188,6 +2795,8 @@ def main() -> str:
         best_path_hint=(),
         best_genome_by_level={},
         best_path_hint_by_level={},
+        best_genome_by_context={},
+        best_path_hint_by_context={},
     )
     menu_cfg, _ = _load_winning_profile(runtime_state, menu_cfg)
 
@@ -2211,21 +2820,37 @@ def main() -> str:
             _run_manual_or_agent_session(screen, clock, menu_cfg, runtime_state, "level_1", use_agent=True, backoffice_overlay=True)
             continue
 
+        if action == "play_agent_selected":
+            selected_level = menu_cfg.training_level
+            if not _is_level_available(selected_level):
+                _show_info_screen(
+                    screen,
+                    clock,
+                    "Demo Agente",
+                    [
+                        f"Nivel seleccionado: {selected_level}",
+                        "Ese nivel aun no tiene mapa disponible.",
+                    ],
+                )
+            else:
+                _run_manual_or_agent_session(screen, clock, menu_cfg, runtime_state, selected_level, use_agent=True, backoffice_overlay=True)
+            continue
+
         if action == "play_agent_sandbox":
             _run_manual_or_agent_session(screen, clock, menu_cfg, runtime_state, "sandbox", use_agent=True, backoffice_overlay=True)
             continue
 
         if action == "backoffice_demo":
             demo_level = menu_cfg.training_level
-            if demo_level in ("level_2", "level_3"):
+            if not _is_level_available(demo_level):
                 _show_info_screen(
                     screen,
                     clock,
                     "Backoffice Demo",
                     [
                         f"Nivel seleccionado: {demo_level}",
-                        "Este nivel aun no esta listo.",
-                        "Cambia a Nivel 1 o Sandbox para demo real del agente.",
+                        "Este nivel aun no tiene mapa cargado.",
+                        "Agrega el .tmx del nivel para habilitar demo.",
                     ],
                 )
             else:
@@ -2251,27 +2876,33 @@ def main() -> str:
             continue
 
         if action == "level_2_placeholder":
-            _show_info_screen(
-                screen,
-                clock,
-                "Nivel 2",
-                [
-                    "Nivel en construccion.",
-                    "Ya esta conectado al benchmark/backoffice como pendiente.",
-                ],
-            )
+            if not _is_level_available("level_2"):
+                _show_info_screen(
+                    screen,
+                    clock,
+                    "Nivel 2",
+                    [
+                        "Mapa de nivel 2 no encontrado.",
+                        "Agrega MapProd2.tmx (o alias) para habilitarlo.",
+                    ],
+                )
+            else:
+                _run_manual_or_agent_session(screen, clock, menu_cfg, runtime_state, "level_2", use_agent=False, backoffice_overlay=False)
             continue
 
         if action == "level_3_placeholder":
-            _show_info_screen(
-                screen,
-                clock,
-                "Nivel 3",
-                [
-                    "Nivel en construccion.",
-                    "Ya esta conectado al benchmark/backoffice como pendiente.",
-                ],
-            )
+            if not _is_level_available("level_3"):
+                _show_info_screen(
+                    screen,
+                    clock,
+                    "Nivel 3",
+                    [
+                        "Mapa de nivel 3 no encontrado.",
+                        "Agrega MapProd3.tmx (o alias) para habilitarlo.",
+                    ],
+                )
+            else:
+                _run_manual_or_agent_session(screen, clock, menu_cfg, runtime_state, "level_3", use_agent=False, backoffice_overlay=False)
             continue
 
         _show_info_screen(

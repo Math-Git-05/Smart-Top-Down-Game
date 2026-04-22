@@ -1,4 +1,4 @@
-# Smart-Top-Down-Game (Atraco Táctico)
+# Smart-Top-Down-Game (Asalto Ninja en la Aldea)
 
 Un juego de acción-sigilo en perspectiva superior (2D top-down) inspirado en títulos como Hotline Miami. El juego se enfoca en movimiento táctico, detección de enemigos y entornos interactivos.
 
@@ -122,6 +122,25 @@ Atraco_Tactico/
 
 ## 🤖 Sistemas de IA
 
+### Implementacion real en el codigo (segun guia del profesor)
+- **Algoritmo genetico (GA):** `ai/genetic_algorithm.py`
+  - Poblacion inicial: `create_population()`
+  - Seleccion/cruce/mutacion: `evolve_population()`
+  - Genoma y genes activos: `Genome` + `GENE_ORDER`
+- **Loop de entrenamiento GA + evaluacion por episodio:** `main.py`
+  - Entrenamiento: `train_agent(...)`
+  - Fitness usado para seleccionar al mejor: `_fitness_from_result(...)`
+  - Reportes TXT: `_save_training_txt(...)`
+- **Agente RL/politica de control:** `ai/rl_agent.py`
+  - Clase principal: `AutoPlayerAgent`
+  - Decision por frame: `decide(...)`
+  - Salida a controles del juego: `decision_to_keys(...)`
+- **Pathfinding A* de soporte:** `systems/pathfinding.py`
+  - Ruta en grilla: `build_route_hint(...)`
+  - Uso reactivo por enemigos: `core/enemy.py` en `_move_toward_reactive(...)`
+- **Sensores/actuadores del agente:** `ai/sensors.py` y `ai/actuators.py`
+  - Se usan como base de percepcion/accion para pruebas y extensiones.
+
 ### FSM (Máquina de Estados Finita)
 - Estados: IDLE, PATROL, PURSUIT, ATTACK, HIT, DEATH
 - Transiciones automáticas basadas en condiciones
@@ -145,7 +164,7 @@ Atraco_Tactico/
 
 ### Mapas Disponibles
 - `Mapa1.tmx` - Mapa principal de juego
-- `MapProd1.tmx`, `MapProd2.tmx` - Mapas de producción
+- `MapProd1.tmx`, `MapProd2.tmx`, `MapProd3.tmx` - Mapas de producción
 - Sandbox - Mapa generado proceduralmente para pruebas
 
 ### Tilesets
@@ -205,7 +224,9 @@ Opciones:
 ### Entrenamiento
 ```python
 # El entrenamiento genera reportes en training_reports/
-# Formato: training_[nivel]_[timestamp].txt
+# Formato: training_[nivel]_[escenario]_[timestamp].txt
+# Tambien guarda modelos por contexto en:
+# training_reports/models/model_[nivel]_[escenario]_[timestamp].json
 ```
 
 ### Benchmarks
@@ -271,6 +292,57 @@ En `ai/sensors.py`:
 - Rango de visión
 - Precisión de sensores
 - Ruido ambiental
+
+## Cambios Recientes (Abril 2026)
+
+- Nombre de juego actualizado en runtime/UI a **Asalto Ninja en la Aldea**.
+- Menu principal reorganizado por secciones para evitar colapsos:
+  - `Partidas`
+  - `Demos`
+  - `IA y Config`
+- BackOffice mantiene paginacion y ya no marca nivel 2/3 como "pendiente" cuando existen mapas.
+- Nivel 3 integrado:
+  - mapa `assets/maps/MapProd3.tmx`
+  - mismas reglas de capas de objetos (`Coli`, `hongos`, `inside-terrain`)
+- Spawn de entrada refinado para niveles 2 y 3:
+  - usa puntos guia por nivel + fallback a zonas caminables validas.
+- Spawn de enemigos mas seguro:
+  - evita zonas visualmente tapadas (capas `over/arbustos/arbol`) para no esconder enemigos bajo arboles.
+- IA de entrenamiento/demo/benchmark con continuidad real:
+  - `path_hint` activo en sesiones (ya no `None`)
+  - ruta base de episodio con A* (`systems/pathfinding.py`)
+  - seed del entrenamiento prioriza mejor modelo por contexto `nivel+escenario`
+- Persistencia de modelos por nivel+escenario:
+  - carpeta: `training_reports/models/`
+  - archivo: `model_<nivel>_<escenario>_<timestamp>.json`
+  - el sistema carga automaticamente el mejor fitness disponible para ese contexto.
+- Reportes de entrenamiento ahora incluyen escenario en el nombre:
+  - `training_<nivel>_<escenario>_<timestamp>.txt`
+- Mejoras de pociones:
+  - vida dura mas en el mapa
+  - mana recupera mas energia al recoger `poder`
+  - ratio de aparicion ligeramente mayor (especialmente vida).
+- Sprites de enemigos actualizados:
+  - se reduce uso de dragones y se priorizan variantes visuales mas limpias (ej. slime, owl, lizard).
+- Escenarios de "varios agentes":
+  - se muestran aliados visuales en demo/play (no solo asistencia invisible).
+  - ahora son configurables desde BackOffice (`Aliados soporte` y `Cantidad aliados`).
+  - dano de soporte reducido para evitar instant-kill.
+- Nivel 3:
+  - al eliminar todos los enemigos termina inmediatamente (sin salida final obligatoria).
+
+### Archivos clave de implementacion IA (segun guia del profesor)
+
+- RL/Politica:
+  - `ai/rl_agent.py` (`AutoPlayerAgent.decide`)
+- Algoritmo genetico:
+  - `ai/genetic_algorithm.py` (`create_population`, `evolve_population`)
+- Entrenamiento + fitness + validacion:
+  - `main.py` (`train_agent`, `_fitness_from_result`)
+- Pathfinding A*:
+  - `systems/pathfinding.py` (`build_route_hint`)
+- Pathfinding reactivo en enemigos:
+  - `core/enemy.py` (`_move_toward_reactive`)
 
 
 ## 👨‍💻 Autor

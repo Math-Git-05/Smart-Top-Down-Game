@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "saved_at": "2026-04-22T01:17:19",
+  "level": "level_1",
+  "enemy_scenario": "mixed_vs_1_agent",
+  "context_key": "level_1|mixed_vs_1_agent",
+  "best_fitness": 123.4,
+  "best_genome": {
+    "fitness": 123.4,
+    "genes": {
+      "aggression": 1.0,
+      "survival": 1.0,
+      "objective": 1.2,
+      "spacing": 0.8,
+      "aim": 1.0,
+      "stalking": 1.0,
+      "unstuck": 1.0
+    }
+  },
+  "path_hint": [
+    [
+      10,
+      10
+    ],
+    [
+      20,
+      20
+    ]
+  ],
+  "config": {
+    "sandbox_enemy_count": 3,
+    "enemy_scenario": "mixed_vs_1_agent",
+    "training_level": "sandbox",
+    "benchmark_runs": 4,
+    "population_size": 8,
+    "generations": 4,
+    "crossover_mode": "uniform",
+    "selection_mode": "tournament",
+    "mutation_rate": 0.18,
+    "mutation_scale": 0.3,
+    "weight_aggression": 1.0,
+    "weight_survival": 1.0,
+    "weight_objective": 1.2,
+    "weight_pathing": 1.0
+  }
+}

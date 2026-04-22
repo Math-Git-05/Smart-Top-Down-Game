@@ -7,10 +7,35 @@ import pygame
 
 from config.settings import SCREEN_HEIGHT, SCREEN_WIDTH
 
+ENEMY_SCENARIO_OPTIONS: list[tuple[str, str, str]] = [
+    ("a_vs_1_agent", "i. Un enemigo tipo A vs 1 agente", "A vs 1"),
+    ("b_vs_1_agent", "ii. Un enemigo tipo B vs 1 agente", "B vs 1"),
+    ("c_vs_1_agent", "iii. Un enemigo tipo C vs 1 agente", "C vs 1"),
+    ("human_vs_1_agent", "iv. Un jugador humano vs 1 agente", "Humano vs 1"),
+    ("many_a_vs_1_agent", "v. Varios enemigos tipo A vs 1 agente", "Muchos A"),
+    ("many_b_vs_1_agent", "vi. Varios enemigos tipo B vs 1 agente", "Muchos B"),
+    ("many_c_vs_1_agent", "vii. Varios enemigos tipo C vs 1 agente", "Muchos C"),
+    ("mixed_vs_1_agent", "viii. Varios de todos vs 1 agente", "Mixto vs 1"),
+    ("mixed_vs_many_agents", "ix. Varios de todos vs varios agentes", "Mixto vs varios"),
+    ("human_vs_many_agents", "x. Un jugador humano vs varios agentes", "Humano vs varios"),
+]
+ENEMY_SCENARIO_KEYS = [item[0] for item in ENEMY_SCENARIO_OPTIONS]
+
+
+def enemy_scenario_label(code: str, short: bool = False) -> str:
+    for key, long_label, short_label in ENEMY_SCENARIO_OPTIONS:
+        if code == key:
+            return short_label if short else long_label
+    fallback = ENEMY_SCENARIO_OPTIONS[7]  # mixed_vs_1_agent
+    return fallback[2] if short else fallback[1]
+
 
 @dataclass(slots=True)
 class AgentMenuConfig:
     sandbox_enemy_count: int = 3
+    enemy_scenario: str = "mixed_vs_1_agent"
+    ally_agents_enabled: bool = True
+    ally_agents_count: int = 2  # cantidad de aliados visuales/de apoyo (excluye al heroe)
     training_level: str = "sandbox"  # level_1 | level_2 | level_3 | sandbox
     benchmark_runs: int = 4
     population_size: int = 8
@@ -27,6 +52,9 @@ class AgentMenuConfig:
     def copy(self) -> "AgentMenuConfig":
         return AgentMenuConfig(
             sandbox_enemy_count=int(self.sandbox_enemy_count),
+            enemy_scenario=str(self.enemy_scenario),
+            ally_agents_enabled=bool(self.ally_agents_enabled),
+            ally_agents_count=int(self.ally_agents_count),
             training_level=str(self.training_level),
             benchmark_runs=int(self.benchmark_runs),
             population_size=int(self.population_size),
@@ -85,17 +113,27 @@ def _row_adjust_enabled(config: AgentMenuConfig, row_key: str) -> bool:
         return False
     if row_key == "sandbox_enemy_count" and config.training_level != "sandbox":
         return False
+    if row_key == "ally_agents_enabled" and config.enemy_scenario not in ("mixed_vs_many_agents", "human_vs_many_agents"):
+        return False
+    if row_key == "ally_agents_count":
+        if config.enemy_scenario not in ("mixed_vs_many_agents", "human_vs_many_agents"):
+            return False
+        if not config.ally_agents_enabled:
+            return False
     return True
 
 
 def run_backoffice_menu(screen: pygame.Surface, clock: pygame.time.Clock, config: AgentMenuConfig) -> MenuResult:
-    title_font = pygame.font.SysFont("consolas", 40, bold=True)
-    row_font = pygame.font.SysFont("consolas", 22, bold=True)
-    small_font = pygame.font.SysFont("consolas", 17)
+    title_font = pygame.font.SysFont("verdana", 40, bold=True)
+    row_font = pygame.font.SysFont("verdana", 22, bold=True)
+    small_font = pygame.font.SysFont("verdana", 17)
 
     all_rows = [
         ("training_level", "Nivel entrenamiento"),
         ("sandbox_enemy_count", "Enemigos sandbox"),
+        ("enemy_scenario", "Escenario combate"),
+        ("ally_agents_enabled", "Aliados soporte"),
+        ("ally_agents_count", "Cantidad aliados"),
         ("population_size", "Poblacion"),
         ("generations", "Generaciones"),
         ("crossover_mode", "Cruce"),
@@ -113,9 +151,9 @@ def run_backoffice_menu(screen: pygame.Surface, clock: pygame.time.Clock, config
         ("back", "Volver"),
     ]
     pages = [
-        ("Basico", all_rows[:6]),
-        ("Pesos", all_rows[6:12]),
-        ("Acciones", all_rows[12:]),
+        ("Basico", all_rows[:9]),
+        ("Pesos", all_rows[9:15]),
+        ("Acciones", all_rows[15:]),
     ]
 
     page_idx = 0
@@ -222,8 +260,8 @@ def _value_text_for_row(config: AgentMenuConfig, row_key: str) -> str:
     if row_key == "training_level":
         name = {
             "level_1": "Nivel 1",
-            "level_2": "Nivel 2 (pend)",
-            "level_3": "Nivel 3 (pend)",
+            "level_2": "Nivel 2",
+            "level_3": "Nivel 3",
             "sandbox": "Sandbox",
         }
         return name.get(config.training_level, config.training_level)
@@ -233,6 +271,12 @@ def _value_text_for_row(config: AgentMenuConfig, row_key: str) -> str:
         if config.training_level != "sandbox":
             return "solo sandbox"
         return str(config.sandbox_enemy_count)
+    if row_key == "enemy_scenario":
+        return enemy_scenario_label(config.enemy_scenario, short=True)
+    if row_key == "ally_agents_enabled":
+        return "SI" if config.ally_agents_enabled else "NO"
+    if row_key == "ally_agents_count":
+        return str(max(0, int(config.ally_agents_count)))
     if row_key == "generations":
         return str(config.generations)
     if row_key == "crossover_mode":
@@ -272,6 +316,12 @@ def _adjust_backoffice_value(config: AgentMenuConfig, row_key: str, direction: i
     elif row_key == "sandbox_enemy_count":
         if config.training_level == "sandbox":
             config.sandbox_enemy_count = max(1, min(50, config.sandbox_enemy_count + direction))
+    elif row_key == "enemy_scenario":
+        config.enemy_scenario = _cycle_value(ENEMY_SCENARIO_KEYS, config.enemy_scenario, direction)
+    elif row_key == "ally_agents_enabled":
+        config.ally_agents_enabled = not bool(config.ally_agents_enabled)
+    elif row_key == "ally_agents_count":
+        config.ally_agents_count = max(0, min(8, int(config.ally_agents_count) + direction))
     elif row_key == "population_size":
         config.population_size = max(2, min(48, config.population_size + direction))
     elif row_key == "generations":
@@ -303,71 +353,117 @@ def run_main_menu(
 ) -> MenuResult:
     cfg = config.copy() if config is not None else AgentMenuConfig()
 
-    title_font = pygame.font.SysFont("consolas", 56, bold=True)
-    subtitle_font = pygame.font.SysFont("consolas", 22, bold=True)
-    option_font = pygame.font.SysFont("consolas", 26, bold=True)
-    small_font = pygame.font.SysFont("consolas", 17)
+    title_font = pygame.font.SysFont("verdana", 54, bold=True)
+    subtitle_font = pygame.font.SysFont("verdana", 22, bold=True)
+    option_font = pygame.font.SysFont("verdana", 26, bold=True)
+    small_font = pygame.font.SysFont("verdana", 17)
 
-    options = [
-        ("play_level_1", "Jugar Nivel 1", "Tutorial disponible"),
-        ("play_sandbox", "Sandbox", "Prueba libre con enemigos configurables"),
-        ("play_agent_level_1", "Demo Agente Nivel 1", "Agente autonomo en mapa principal"),
-        ("play_agent_sandbox", "Demo Agente Sandbox", "Agente autonomo en arena de prueba"),
-        ("open_backoffice", "Backoffice IA", "Entrenamiento, cruces, seleccion y benchmark"),
-        ("level_2_placeholder", "Nivel 2", "En preparacion (placeholder)"),
-        ("level_3_placeholder", "Nivel 3", "En preparacion (placeholder)"),
-        ("quit", "Salir", "Cerrar juego"),
+    pages = [
+        (
+            "Partidas",
+            [
+                ("play_level_1", "Jugar Nivel 1", "Tutorial disponible"),
+                ("level_2_placeholder", "Jugar Nivel 2", "Mapa 2 (usa selector de escenario)"),
+                ("level_3_placeholder", "Jugar Nivel 3", "Mapa 3 (usa selector de escenario)"),
+                ("play_sandbox", "Sandbox", "Prueba libre con enemigos configurables"),
+            ],
+        ),
+        (
+            "Demos",
+            [
+                ("play_agent_level_1", "Demo Agente Nivel 1", "Agente autonomo en mapa principal"),
+                ("play_agent_selected", "Demo Agente (Nivel BO)", "Usa el nivel seleccionado en Backoffice"),
+                ("play_agent_sandbox", "Demo Agente Sandbox", "Agente autonomo en arena de prueba"),
+            ],
+        ),
+        (
+            "IA y Config",
+            [
+                ("scenario_select", "Escenario por Nivel", "Selecciona el enfrentamiento i-x"),
+                ("open_backoffice", "Backoffice IA", "Entrenamiento, cruces, seleccion y benchmark"),
+                ("quit", "Salir", "Cerrar juego"),
+            ],
+        ),
     ]
 
-    selected = 0
+    page_idx = 0
+    selected_by_page = [0 for _ in pages]
     t = 0
 
     while True:
+        rows = pages[page_idx][1]
+        selected = selected_by_page[page_idx] % max(1, len(rows))
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return MenuResult("quit", cfg.copy())
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     return MenuResult("quit", cfg.copy())
+                if event.key in (pygame.K_TAB, pygame.K_q, pygame.K_e):
+                    direction = 1
+                    if event.key == pygame.K_q:
+                        direction = -1
+                    page_idx = (page_idx + direction) % len(pages)
+                    rows = pages[page_idx][1]
+                    selected = selected_by_page[page_idx] % max(1, len(rows))
                 if event.key in (pygame.K_UP, pygame.K_w):
-                    selected = (selected - 1) % len(options)
+                    selected = (selected - 1) % len(rows)
                 if event.key in (pygame.K_DOWN, pygame.K_s):
-                    selected = (selected + 1) % len(options)
+                    selected = (selected + 1) % len(rows)
                 if event.key in (pygame.K_LEFT, pygame.K_a):
-                    current_action = options[selected][0]
+                    current_action = rows[selected][0]
                     if current_action in ("play_sandbox", "play_agent_sandbox"):
                         cfg.sandbox_enemy_count = max(1, cfg.sandbox_enemy_count - 1)
+                    elif current_action == "scenario_select":
+                        cfg.enemy_scenario = _cycle_value(ENEMY_SCENARIO_KEYS, cfg.enemy_scenario, -1)
+                    elif current_action == "play_agent_selected":
+                        cfg.training_level = _cycle_value(["level_1", "level_2", "level_3", "sandbox"], cfg.training_level, -1)
                 if event.key in (pygame.K_RIGHT, pygame.K_d):
-                    current_action = options[selected][0]
+                    current_action = rows[selected][0]
                     if current_action in ("play_sandbox", "play_agent_sandbox"):
                         cfg.sandbox_enemy_count = min(50, cfg.sandbox_enemy_count + 1)
+                    elif current_action == "scenario_select":
+                        cfg.enemy_scenario = _cycle_value(ENEMY_SCENARIO_KEYS, cfg.enemy_scenario, +1)
+                    elif current_action == "play_agent_selected":
+                        cfg.training_level = _cycle_value(["level_1", "level_2", "level_3", "sandbox"], cfg.training_level, +1)
                 if event.key in (pygame.K_RETURN, pygame.K_SPACE):
-                    action = options[selected][0]
+                    action = rows[selected][0]
                     if action == "open_backoffice":
                         result = run_backoffice_menu(screen, clock, cfg)
                         cfg = result.config.copy()
                         if result.action in ("quit", "train_agent", "run_benchmark", "backoffice_demo"):
                             return MenuResult(result.action, cfg.copy())
                         continue
+                    if action == "scenario_select":
+                        cfg.enemy_scenario = _cycle_value(ENEMY_SCENARIO_KEYS, cfg.enemy_scenario, +1)
+                        continue
                     return MenuResult(action, cfg.copy())
+                selected_by_page[page_idx] = selected
 
         t += 1
         _draw_background(screen, t)
 
-        title = _render_label(title_font, "ENCUENTRA EL MANGU", (252, 218, 132))
-        subtitle = _render_label(subtitle_font, "Menu principal + Sandbox + Backoffice IA", (208, 228, 198))
+        title = _render_label(title_font, "ASALTO NINJA EN LA ALDEA", (252, 218, 132))
+        subtitle = _render_label(subtitle_font, "Menu principal separado por secciones", (208, 228, 198))
         screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, 30))
         screen.blit(subtitle, (SCREEN_WIDTH // 2 - subtitle.get_width() // 2, 96))
 
         list_rect = pygame.Rect(66, 142, SCREEN_WIDTH - 132, 432)
         _draw_card(screen, list_rect, (28, 38, 30), border=(164, 196, 142), border_width=3)
 
-        rows_start_y = list_rect.y + 14
-        row_h = 40
-        row_step = 44
+        page_left = _render_label(small_font, "<", (210, 236, 192))
+        page_text = _render_label(small_font, f"Seccion {page_idx + 1}/{len(pages)} - {pages[page_idx][0]}", (226, 238, 218))
+        page_right = _render_label(small_font, ">", (210, 236, 192))
+        screen.blit(page_left, (list_rect.right - 300, list_rect.y + 8))
+        screen.blit(page_text, (list_rect.right - 282, list_rect.y + 8))
+        screen.blit(page_right, (list_rect.right - 18, list_rect.y + 8))
+
+        rows_start_y = list_rect.y + 42
+        row_h = 42
+        row_step = 48
         desc_y = list_rect.bottom - 30
 
-        for idx, (action, label, description) in enumerate(options):
+        for idx, (action, label, description) in enumerate(rows):
             row_rect = pygame.Rect(list_rect.x + 16, rows_start_y + idx * row_step, list_rect.width - 32, row_h)
             selected_row = idx == selected
             row_fill = (58, 80, 58) if selected_row else (36, 50, 38)
@@ -375,22 +471,40 @@ def run_main_menu(
             _draw_card(screen, row_rect, row_fill, border=row_border, border_width=2)
 
             left = _render_label(option_font, label, (248, 248, 244) if selected_row else (220, 230, 216))
-            screen.blit(left, (row_rect.x + 10, row_rect.y + 5))
+            screen.blit(left, (row_rect.x + 10, row_rect.y + 6))
 
             if action in ("play_sandbox", "play_agent_sandbox"):
                 value = _render_label(option_font, f"enemigos: {cfg.sandbox_enemy_count}", (255, 214, 118))
-                screen.blit(value, (row_rect.right - value.get_width() - 10, row_rect.y + 5))
+                screen.blit(value, (row_rect.right - value.get_width() - 10, row_rect.y + 6))
+            elif action == "scenario_select":
+                value = _render_label(option_font, enemy_scenario_label(cfg.enemy_scenario, short=True), (255, 214, 118))
+                screen.blit(value, (row_rect.right - value.get_width() - 10, row_rect.y + 6))
+            elif action == "play_agent_selected":
+                map_name = {
+                    "level_1": "Nivel 1",
+                    "level_2": "Nivel 2",
+                    "level_3": "Nivel 3",
+                    "sandbox": "Sandbox",
+                }.get(cfg.training_level, cfg.training_level)
+                value = _render_label(option_font, map_name, (255, 214, 118))
+                screen.blit(value, (row_rect.right - value.get_width() - 10, row_rect.y + 6))
 
             if selected_row:
-                desc = _render_label(small_font, description, (196, 222, 188))
+                desc_text = description
+                if action == "scenario_select":
+                    desc_text = enemy_scenario_label(cfg.enemy_scenario, short=False)
+                elif action == "play_agent_selected":
+                    desc_text = "Ajusta nivel con IZQ/DER y ejecuta con ENTER"
+                desc = _render_label(small_font, desc_text, (196, 222, 188))
                 screen.blit(desc, (list_rect.x + 18, desc_y))
 
         right_panel = pygame.Rect(SCREEN_WIDTH - 360, 586, 294, 90)
         _draw_card(screen, right_panel, (30, 44, 33), border=(118, 152, 108), border_width=2)
         quick1 = _render_label(small_font, f"Sandbox enemigos: {cfg.sandbox_enemy_count}", (226, 236, 222))
-        quick2 = _render_label(small_font, f"Cruce: {cfg.crossover_mode}", (226, 236, 222))
-        quick3 = _render_label(small_font, f"Seleccion: {cfg.selection_mode}", (226, 236, 222))
-        quick4 = _render_label(small_font, f"Mutacion: {cfg.mutation_rate:.2f}", (226, 236, 222))
+        quick2 = _render_label(small_font, f"Escenario: {enemy_scenario_label(cfg.enemy_scenario, short=True)}", (226, 236, 222))
+        quick3 = _render_label(small_font, f"Demo nivel: {cfg.training_level}", (226, 236, 222))
+        ally_text = f"Aliados: {'ON' if cfg.ally_agents_enabled else 'OFF'} x{cfg.ally_agents_count}"
+        quick4 = _render_label(small_font, ally_text, (226, 236, 222))
         screen.blit(quick1, (right_panel.x + 10, right_panel.y + 8))
         screen.blit(quick2, (right_panel.x + 10, right_panel.y + 28))
         screen.blit(quick3, (right_panel.x + 10, right_panel.y + 48))
@@ -398,7 +512,7 @@ def run_main_menu(
 
         footer = _render_label(
             small_font,
-            "ENTER confirmar | UP/DOWN navegar | LEFT/RIGHT ajustar sandbox",
+            "ENTER confirmar | UP/DOWN navegar | LEFT/RIGHT ajustar | TAB/Q/E cambiar seccion",
             (166, 190, 160),
         )
         screen.blit(footer, (SCREEN_WIDTH // 2 - footer.get_width() // 2, SCREEN_HEIGHT - 24))

@@ -257,6 +257,27 @@ class AutoPlayerAgent:
         probe.centery += int(round(delta.y))
         return not self._rect_hits_collision(probe, game_map)
 
+    def _line_of_sight_clear(self, start: pygame.Vector2, end: pygame.Vector2, game_map) -> bool:
+        if game_map is None:
+            return True
+        segment = end - start
+        distance = float(segment.length())
+        if distance <= 1e-6:
+            return True
+
+        direction = segment.normalize()
+        probe_size = 8
+        step = max(8.0, min(14.0, float(probe_size) * 1.1))
+        steps = max(2, int(distance / step))
+        probe = pygame.Rect(0, 0, probe_size, probe_size)
+        for i in range(1, steps):
+            t = float(i) / float(steps)
+            point = start + (direction * (distance * t))
+            probe.center = (int(round(point.x)), int(round(point.y)))
+            if self._rect_hits_collision(probe, game_map):
+                return False
+        return True
+
     def _update_oscillation(self, move_vec: pygame.Vector2):
         if move_vec.length_squared() <= 1e-6:
             self._oscillation_score = max(0.0, self._oscillation_score - 0.25)
@@ -590,9 +611,10 @@ class AutoPlayerAgent:
             vec = pygame.Vector2(0.0, 1.0)
         distance = max(1e-6, vec.length())
         direction = vec.normalize()
+        line_clear = self._line_of_sight_clear(player_center, target, game_map)
 
         # En contacto/superposicion: priorizar melee siempre.
-        overlap_melee_threshold = max(20.0, float(min(player.hitbox.width, player.hitbox.height)) * 0.85)
+        overlap_melee_threshold = max(14.0, float(min(player.hitbox.width, player.hitbox.height)) * 0.58)
         if distance <= overlap_melee_threshold:
             decision.melee = True
             engage_push = direction * 0.55
@@ -621,7 +643,9 @@ class AutoPlayerAgent:
             preferred_distance = max(44.0, preferred_distance - 34.0)
 
         step_probe = max(6.0, float(getattr(player, "speed", 2.0)) * (3.6 + (0.35 * max(0.0, stalking))))
-        direct_blocked = not self._can_move(player, game_map, direction, step_px=step_probe)
+        direct_blocked = (not self._can_move(player, game_map, direction, step_px=step_probe)) or (
+            (not line_clear) and distance > 70.0
+        )
         prev_target_dist = self._last_target_distance if self._last_target_distance is not None else distance
         progress_delta = float(prev_target_dist - distance)
         forced_move: pygame.Vector2 | None = None
@@ -648,6 +672,13 @@ class AutoPlayerAgent:
                 commit = max(10, int(14 + (max(0.0, stalking) * 10.0) + min(10.0, self._oscillation_score * 0.25)))
                 self._stalking_timer = commit
                 forced_move = self._stalking_direction.normalize() * min(1.0, 0.60 + (objective * 0.20))
+        elif forced_move is None and (not line_clear) and distance > 44.0:
+            # Si hay pared entre agente y objetivo, priorizar rodear antes de disparar.
+            picked = self._pick_stalking_detour(direction, player, game_map, step_probe, side_hint=self._stalking_side)
+            if picked is not None:
+                self._stalking_direction, self._stalking_side = picked
+                self._stalking_timer = max(self._stalking_timer, 10)
+                forced_move = self._stalking_direction.normalize() * min(1.0, 0.58 + (objective * 0.18))
 
         if forced_move is not None:
             move = forced_move
@@ -676,7 +707,7 @@ class AutoPlayerAgent:
         decision.move_x = float(move.x)
         decision.move_y = float(move.y)
 
-        melee_threshold = 58.0 if not low_energy else 76.0
+        melee_threshold = 32.0 if not low_energy else 42.0
         if distance <= melee_threshold and aggression > 0.25 and hp_ratio > 0.30:
             decision.melee = True
             if distance > 26.0:
@@ -690,6 +721,7 @@ class AutoPlayerAgent:
             and distance <= 260.0
             and not decision.melee
             and not low_energy
+            and line_clear
             and player.energy >= max(1.0, float(getattr(player, "ranged_mana_cost", 1.0)))
         )
         if can_shoot and aim > 0.20 and self._shoot_cooldown <= 0:

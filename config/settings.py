@@ -5,7 +5,7 @@
 # ── Pantalla ─────────────────────────────────────────────────
 SCREEN_WIDTH  = 960
 SCREEN_HEIGHT = 704
-SCREEN_TITLE  = "Encuentra el Mangú Legendario"
+SCREEN_TITLE  = "Asalto Ninja en la Aldea"
 FPS           = 60
 
 # ── Mapa / Tiles ─────────────────────────────────────────────
@@ -25,22 +25,22 @@ PLAYER_BULLET_SPEED = 4.4
 # Pociones activas y limite de spawns por tipo durante una partida.
 # Para jugar solo con vida+escudo: ("vida", "escudo")
 ENABLED_POTION_TYPES = ("vida", "escudo", "poder")
-MAX_POTION_SPAWNS_PER_TYPE = 1
+MAX_POTION_SPAWNS_PER_TYPE = 4
 
 # ── Enemigos ──────────────────────────────────────────────────
 ENEMY_A_SPEED        = 0.72  # Ajustado: el perseguidor rapido estaba demasiado agresivo
 ENEMY_A_HEALTH       = 80
-ENEMY_A_DAMAGE       = 3
+ENEMY_A_DAMAGE       = 5
 ENEMY_A_VISION_RANGE = 200   # px
 
 ENEMY_B_SPEED        = 0     # no se mueve
 ENEMY_B_HEALTH       = 60
-ENEMY_B_DAMAGE       = 5
+ENEMY_B_DAMAGE       = 8
 ENEMY_B_VISION_RANGE = 300
 
 ENEMY_C_SPEED        = 0.75  # Ajustado: velocidad mas controlada para lectura de combate
 ENEMY_C_HEALTH       = 50
-ENEMY_C_DAMAGE       = 5
+ENEMY_C_DAMAGE       = 8
 ENEMY_C_VISION_RANGE = 250
 ENEMY_C_FLEE_RANGE   = 80    # si el jugador está más cerca que esto, huye
 ENEMY_MELEE_RANGE    = 34
@@ -68,21 +68,43 @@ SPRITES_DIR = os.path.join(ASSETS_DIR, "sprites")
 SOUNDS_DIR  = os.path.join(ASSETS_DIR, "sounds")
 HONGO_SPRITE = "hongos.png"
 
-# Mapa del nivel 1 (elige el primer archivo existente)
-MAP_FILE_CANDIDATES = (
+# Mapas por nivel (elige el primer archivo existente)
+MAP_FILE_LEVEL_1_CANDIDATES = (
     "level1.tmx",
     "MapProd1.tmx",
     "Mapa1.tmx",
     "MapaProd1.tmx",
 )
-MAP_FILE = next(
-    (
-        os.path.join(MAPS_DIR, map_name)
-        for map_name in MAP_FILE_CANDIDATES
-        if os.path.exists(os.path.join(MAPS_DIR, map_name))
-    ),
-    os.path.join(MAPS_DIR, MAP_FILE_CANDIDATES[0]),
+
+MAP_FILE_LEVEL_2_CANDIDATES = (
+    "MapProd2.tmx",
+    "Map Proof 2.tmx",
+    "MapProof2.tmx",
+    "Mapa2.tmx",
 )
+
+MAP_FILE_LEVEL_3_CANDIDATES = (
+    "MapProd3.tmx",
+    "Map Proof 3.tmx",
+    "MapProof3.tmx",
+    "Mapa3.tmx",
+)
+
+
+def _pick_map_file(candidates: tuple[str, ...]) -> str | None:
+    for map_name in candidates:
+        candidate = os.path.join(MAPS_DIR, map_name)
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
+MAP_FILE_LEVEL_1 = _pick_map_file(MAP_FILE_LEVEL_1_CANDIDATES) or os.path.join(MAPS_DIR, MAP_FILE_LEVEL_1_CANDIDATES[0])
+MAP_FILE_LEVEL_2 = _pick_map_file(MAP_FILE_LEVEL_2_CANDIDATES)
+MAP_FILE_LEVEL_3 = _pick_map_file(MAP_FILE_LEVEL_3_CANDIDATES)
+
+# Compat legacy
+MAP_FILE = MAP_FILE_LEVEL_1
 
 # --- Capas de Suelo / Base ---
 LAYER_PISO_GRASS      = "piso-grass"
