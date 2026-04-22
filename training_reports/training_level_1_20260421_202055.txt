@@ -1,0 +1,14 @@
+Atraco Tactico - Reporte de Entrenamiento IA
+Fecha: 2026-04-21T20:20:55
+Nivel: level_1
+Config: poblacion=4, generaciones=1, seleccion=tournament, cruce=uniform, mutacion=0.30x0.30, pesos(a/s/o/p)=1.65/1.65/2.10/1.45
+
+Resumen:
+- Gen 1: best=1943.5 | kills=1/5 | dmg=80 | stuck=40f | hongos=0 | success=0%
+- Validacion final: NO PASO | kills=1/5 | dmg=80 | sim_t=233.3s | real_t=18.7s | stuck_max=40f | hongos=0
+
+Detalle por individuo:
+- gen=1/1 | ind=1/4 | fit=1943.23 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=16.59s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/1 | ind=2/4 | fit=1943.28 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=15.78s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/1 | ind=3/4 | fit=1943.20 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=16.21s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout
+- gen=1/1 | ind=4/4 | fit=1943.48 | kills=1/5 | dmg=80 | sim_t=200.00s | real_t=16.11s | frames=12000 | stuck=40f | hongos=0 | ok=NO | motivo=timeout

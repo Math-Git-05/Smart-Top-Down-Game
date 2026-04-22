@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import json
 import math
 from pathlib import Path
 import random
@@ -43,9 +44,9 @@ from infrastructure.map_loader import MapLoader
 from infrastructure.menu_screen import AgentMenuConfig, MenuResult, run_main_menu
 from infrastructure.renderer import Camera, Renderer
 from infrastructure.sandbox_map import SandboxMap
-from systems.pathfinding import build_route_hint
 
 ENEMIES_TO_CLEAR_LEVEL_1 = 5
+WINNING_PROFILE_PATH = Path("training_reports") / "winning_agent_profile.json"
 
 
 @dataclass(slots=True)
@@ -81,6 +82,7 @@ class SessionResult:
     max_still_frames: int = 0
     distance_moved: float = 0.0
     hazard_hits: int = 0
+    oscillation_events: int = 0
     trace_points: tuple[tuple[int, int], ...] = ()
     route_hint: tuple[tuple[int, int], ...] = ()
 
@@ -91,6 +93,245 @@ class RuntimeState:
     best_path_hint: tuple[tuple[int, int], ...] = ()
     best_genome_by_level: dict[str, Genome] | None = None
     best_path_hint_by_level: dict[str, tuple[tuple[int, int], ...]] | None = None
+
+
+def _serialize_hint_points(hint: tuple[tuple[int, int], ...] | list[tuple[int, int]] | None) -> list[list[int]]:
+    out: list[list[int]] = []
+    for point in hint or ():
+        try:
+            out.append([int(point[0]), int(point[1])])
+        except Exception:
+            continue
+    return out
+
+
+def _deserialize_hint_points(payload) -> tuple[tuple[int, int], ...]:
+    if not isinstance(payload, (list, tuple)):
+        return ()
+    out: list[tuple[int, int]] = []
+    for point in payload:
+        if not isinstance(point, (list, tuple)) or len(point) < 2:
+            continue
+        try:
+            out.append((int(point[0]), int(point[1])))
+        except Exception:
+            continue
+    return tuple(out)
+
+
+def _serialize_genome(genome: Genome | None) -> dict | None:
+    if genome is None:
+        return None
+    return {
+        "fitness": float(getattr(genome, "fitness", 0.0)),
+        "genes": {
+            name: float(genome.genes.get(name, default_genome().genes.get(name, 1.0)))
+            for name in GENE_ORDER
+        },
+    }
+
+
+def _deserialize_genome(payload) -> Genome | None:
+    if not isinstance(payload, dict):
+        return None
+    genes_payload = payload.get("genes", {})
+    if not isinstance(genes_payload, dict):
+        return None
+
+    base = default_genome()
+    for name in GENE_ORDER:
+        if name not in genes_payload:
+            continue
+        try:
+            base.genes[name] = _clamp_gene(float(genes_payload.get(name, base.genes[name])), -2.0, 2.0)
+        except Exception:
+            continue
+
+    try:
+        base.fitness = float(payload.get("fitness", 0.0))
+    except Exception:
+        base.fitness = 0.0
+    return base
+
+
+def _menu_cfg_to_payload(menu_cfg: AgentMenuConfig) -> dict:
+    return {
+        "sandbox_enemy_count": int(menu_cfg.sandbox_enemy_count),
+        "training_level": str(menu_cfg.training_level),
+        "benchmark_runs": int(menu_cfg.benchmark_runs),
+        "population_size": int(menu_cfg.population_size),
+        "generations": int(menu_cfg.generations),
+        "crossover_mode": str(menu_cfg.crossover_mode),
+        "selection_mode": str(menu_cfg.selection_mode),
+        "mutation_rate": float(menu_cfg.mutation_rate),
+        "mutation_scale": float(menu_cfg.mutation_scale),
+        "weight_aggression": float(menu_cfg.weight_aggression),
+        "weight_survival": float(menu_cfg.weight_survival),
+        "weight_objective": float(menu_cfg.weight_objective),
+        "weight_pathing": float(menu_cfg.weight_pathing),
+    }
+
+
+def _menu_cfg_from_payload(payload, fallback: AgentMenuConfig) -> AgentMenuConfig:
+    cfg = fallback.copy()
+    if not isinstance(payload, dict):
+        return cfg
+
+    try:
+        cfg.sandbox_enemy_count = max(1, min(50, int(payload.get("sandbox_enemy_count", cfg.sandbox_enemy_count))))
+    except Exception:
+        pass
+    try:
+        cfg.training_level = str(payload.get("training_level", cfg.training_level))
+        if cfg.training_level not in {"level_1", "level_2", "level_3", "sandbox"}:
+            cfg.training_level = fallback.training_level
+    except Exception:
+        pass
+    try:
+        cfg.benchmark_runs = max(1, min(40, int(payload.get("benchmark_runs", cfg.benchmark_runs))))
+    except Exception:
+        pass
+    try:
+        cfg.population_size = max(2, min(48, int(payload.get("population_size", cfg.population_size))))
+    except Exception:
+        pass
+    try:
+        cfg.generations = max(1, min(40, int(payload.get("generations", cfg.generations))))
+    except Exception:
+        pass
+    try:
+        cfg.crossover_mode = str(payload.get("crossover_mode", cfg.crossover_mode))
+        if cfg.crossover_mode not in {"uniform", "single_point", "blend"}:
+            cfg.crossover_mode = fallback.crossover_mode
+    except Exception:
+        pass
+    try:
+        cfg.selection_mode = str(payload.get("selection_mode", cfg.selection_mode))
+        if cfg.selection_mode not in {"tournament", "roulette", "rank"}:
+            cfg.selection_mode = fallback.selection_mode
+    except Exception:
+        pass
+    try:
+        cfg.mutation_rate = max(0.01, min(0.90, float(payload.get("mutation_rate", cfg.mutation_rate))))
+    except Exception:
+        pass
+    try:
+        cfg.mutation_scale = max(0.01, min(1.20, float(payload.get("mutation_scale", cfg.mutation_scale))))
+    except Exception:
+        pass
+    try:
+        cfg.weight_aggression = max(-1.5, min(3.0, float(payload.get("weight_aggression", cfg.weight_aggression))))
+    except Exception:
+        pass
+    try:
+        cfg.weight_survival = max(-1.5, min(3.0, float(payload.get("weight_survival", cfg.weight_survival))))
+    except Exception:
+        pass
+    try:
+        cfg.weight_objective = max(-1.5, min(3.0, float(payload.get("weight_objective", cfg.weight_objective))))
+    except Exception:
+        pass
+    try:
+        cfg.weight_pathing = max(-1.5, min(3.0, float(payload.get("weight_pathing", cfg.weight_pathing))))
+    except Exception:
+        pass
+    return cfg
+
+
+def _register_runtime_winner(
+    runtime_state: RuntimeState,
+    level_id: str,
+    genome: Genome | None,
+    path_hint: tuple[tuple[int, int], ...] | None = None,
+):
+    if genome is None:
+        return
+    if runtime_state.best_genome_by_level is None:
+        runtime_state.best_genome_by_level = {}
+    if runtime_state.best_path_hint_by_level is None:
+        runtime_state.best_path_hint_by_level = {}
+
+    runtime_state.best_genome = genome.copy()
+    runtime_state.best_path_hint = tuple(path_hint or ())
+    runtime_state.best_genome_by_level[level_id] = genome.copy()
+    runtime_state.best_path_hint_by_level[level_id] = tuple(path_hint or ())
+
+
+def _save_winning_profile(
+    runtime_state: RuntimeState,
+    menu_cfg: AgentMenuConfig,
+    level_id: str,
+    source: str,
+) -> str | None:
+    payload: dict = {
+        "version": 1,
+        "saved_at": datetime.now().isoformat(timespec="seconds"),
+        "source": str(source),
+        "level": str(level_id),
+        "config": _menu_cfg_to_payload(menu_cfg),
+        "best_genome": _serialize_genome(runtime_state.best_genome),
+        "best_path_hint": _serialize_hint_points(runtime_state.best_path_hint),
+        "by_level": {},
+    }
+
+    by_level_gen = runtime_state.best_genome_by_level or {}
+    by_level_hint = runtime_state.best_path_hint_by_level or {}
+    by_level_payload: dict[str, dict] = {}
+    all_levels = sorted(set(by_level_gen.keys()) | set(by_level_hint.keys()))
+    for level in all_levels:
+        gen = by_level_gen.get(level)
+        hint = by_level_hint.get(level, ())
+        if gen is None and not hint:
+            continue
+        by_level_payload[str(level)] = {
+            "genome": _serialize_genome(gen),
+            "path_hint": _serialize_hint_points(hint),
+        }
+    payload["by_level"] = by_level_payload
+
+    try:
+        WINNING_PROFILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with WINNING_PROFILE_PATH.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=True, indent=2)
+    except Exception:
+        return None
+    return str(WINNING_PROFILE_PATH)
+
+
+def _load_winning_profile(
+    runtime_state: RuntimeState,
+    menu_cfg: AgentMenuConfig,
+) -> tuple[AgentMenuConfig, str | None]:
+    if not WINNING_PROFILE_PATH.exists():
+        return menu_cfg, None
+
+    try:
+        with WINNING_PROFILE_PATH.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except Exception:
+        return menu_cfg, None
+
+    loaded_cfg = _menu_cfg_from_payload(payload.get("config", {}), menu_cfg)
+
+    best_gen = _deserialize_genome(payload.get("best_genome"))
+    if best_gen is not None:
+        runtime_state.best_genome = best_gen
+    runtime_state.best_path_hint = _deserialize_hint_points(payload.get("best_path_hint", ()))
+
+    by_level_data = payload.get("by_level", {})
+    if isinstance(by_level_data, dict):
+        runtime_state.best_genome_by_level = {}
+        runtime_state.best_path_hint_by_level = {}
+        for level, level_payload in by_level_data.items():
+            if not isinstance(level_payload, dict):
+                continue
+            level_gen = _deserialize_genome(level_payload.get("genome"))
+            level_hint = _deserialize_hint_points(level_payload.get("path_hint", ()))
+            if level_gen is not None:
+                runtime_state.best_genome_by_level[str(level)] = level_gen
+            if level_hint:
+                runtime_state.best_path_hint_by_level[str(level)] = level_hint
+    return loaded_cfg, str(WINNING_PROFILE_PATH)
 
 
 def _build_layer_trigger_rect(game_map, layer_name: str, inflate: int = 20):
@@ -197,19 +438,7 @@ def _compress_trace_points(
 
 
 def _build_episode_route_hint(game_map, player: Player, enemy_group: pygame.sprite.Group) -> tuple[tuple[int, int], ...]:
-    enemy_points: list[tuple[int, int]] = [
-        (int(enemy.rect.centerx), int(enemy.rect.centery))
-        for enemy in enemy_group
-    ]
-    if not enemy_points:
-        return ()
-    route = build_route_hint(
-        game_map=game_map,
-        start_world=(int(player.hitbox.centerx), int(player.hitbox.centery)),
-        goal_world_points=enemy_points,
-        max_points=360,
-    )
-    return _compress_trace_points(route, min_step=14.0, max_points=320)
+    return ()
 
 
 def _choose_training_seed(level: str, runtime_state: RuntimeState) -> tuple[Genome | None, tuple[tuple[int, int], ...]]:
@@ -485,13 +714,13 @@ def _draw_agent_overlay(screen: pygame.Surface, cfg: SessionConfig, genome: Geno
         return
     g = genome.genes
     line4 = font.render(
-        "a:{:.2f} s:{:.2f} o:{:.2f} sp:{:.2f} aim:{:.2f} p:{:.2f} u:{:.2f}".format(
+        "a:{:.2f} s:{:.2f} o:{:.2f} sp:{:.2f} aim:{:.2f} stk:{:.2f} u:{:.2f}".format(
             float(g.get("aggression", 0.0)),
             float(g.get("survival", 0.0)),
             float(g.get("objective", 0.0)),
             float(g.get("spacing", 0.0)),
             float(g.get("aim", 0.0)),
-            float(g.get("pathing", 0.0)),
+            float(g.get("stalking", g.get("pathing", 0.0))),
             float(g.get("unstuck", 0.0)),
         ),
         True,
@@ -659,6 +888,7 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
             damage_dealt=0.0,
             max_still_frames=0,
             distance_moved=0.0,
+            oscillation_events=0,
             trace_points=(),
             route_hint=(),
         )
@@ -722,8 +952,6 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
     objective_complete = total_enemies == 0
     enemies_killed = max(0, total_enemies - len(enemy_group))
     episode_route_hint: tuple[tuple[int, int], ...] = ()
-    if cfg.use_agent and total_enemies > 0:
-        episode_route_hint = _build_episode_route_hint(game_map, player, enemy_group)
 
     start_ms = pygame.time.get_ticks()
     unlocked_message_until_ms = 0
@@ -743,9 +971,12 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
     sandbox_enemy_target = max(1, enemy_count)
     initial_total_enemy_hp = sum(float(getattr(enemy, "health", 0.0)) for enemy in enemy_group)
     last_player_center = pygame.Vector2(float(player.hitbox.centerx), float(player.hitbox.centery))
+    last_motion_vec = pygame.Vector2(0.0, 0.0)
     distance_moved = 0.0
     current_still_frames = 0
     max_still_frames = 0
+    oscillation_events = 0
+    oscillation_cooldown = 0
     paused = False
     pause_started_ms = 0
     paused_total_ms = 0
@@ -833,65 +1064,13 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
     else:
         _set_door_open(False)
 
-    chosen_hint = tuple(cfg.path_hint or ())
-    if len(chosen_hint) < 18 and episode_route_hint:
-        chosen_hint = episode_route_hint
-    elif chosen_hint and episode_route_hint:
-        combined = list(chosen_hint)
-        for point in episode_route_hint:
-            if len(combined) >= 420:
-                break
-            if not combined or (abs(point[0] - combined[-1][0]) + abs(point[1] - combined[-1][1])) >= 10:
-                combined.append(point)
-        chosen_hint = tuple(combined)
+    chosen_hint: tuple[tuple[int, int], ...] = ()
 
     agent = (
-        AutoPlayerAgent.from_genome(cfg.agent_genome, seed=17, path_hint=chosen_hint)
+        AutoPlayerAgent.from_genome(cfg.agent_genome, seed=17, path_hint=None)
         if cfg.use_agent
         else None
     )
-    last_hint_refresh_frame = -9999
-    last_hint_signature: tuple[tuple[int, int], ...] = ()
-    last_kill_count = 0
-
-    def _refresh_agent_route_hint(force: bool = False):
-        nonlocal chosen_hint, last_hint_refresh_frame, last_hint_signature
-        if not cfg.use_agent or agent is None:
-            return
-        if len(enemy_group) <= 0:
-            return
-        if not force and (frame_count - last_hint_refresh_frame) < 42:
-            return
-
-        signature = tuple(
-            sorted((int(enemy.rect.centerx), int(enemy.rect.centery)) for enemy in enemy_group)
-        )
-        if (
-            (not force)
-            and signature == last_hint_signature
-            and current_still_frames < 24
-            and (frame_count - last_hint_refresh_frame) < 150
-        ):
-            return
-
-        route = build_route_hint(
-            game_map=game_map,
-            start_world=(int(player.hitbox.centerx), int(player.hitbox.centery)),
-            goal_world_points=list(signature),
-            max_points=360,
-        )
-        route_hint = _compress_trace_points(route, min_step=14.0, max_points=320)
-        if route_hint:
-            chosen_hint = route_hint
-            agent.set_path_hint(
-                chosen_hint,
-                player_center=(int(player.hitbox.centerx), int(player.hitbox.centery)),
-            )
-            last_hint_signature = signature
-            last_hint_refresh_frame = frame_count
-
-    if agent is not None and chosen_hint:
-        agent.set_path_hint(chosen_hint, player_center=(int(player.hitbox.centerx), int(player.hitbox.centery)))
 
     frame_count = 0
     running = True
@@ -988,7 +1167,7 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
             ):
                 origin, direction = _get_pointer_origin_and_direction(player, camera, renderer, mouse_pos=event.pos)
                 target = origin + (direction * 260.0)
-                player.fire_ranged_at(float(target.x), float(target.y), game_map=game_map)
+                player.fire_ranged_at(float(target.x), float(target.y), game_map=game_map, enemies=list(enemy_group))
 
         if not running:
             break
@@ -1020,7 +1199,7 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
                 )
                 if decision.ranged_target is not None:
                     tx, ty = decision.ranged_target
-                    player.fire_ranged_at(tx, ty, game_map=game_map)
+                    player.fire_ranged_at(tx, ty, game_map=game_map, enemies=list(enemy_group))
                 keys = decision_to_keys(decision)
             else:
                 keys = pygame.key.get_pressed()
@@ -1071,12 +1250,22 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
             new_player_center = pygame.Vector2(float(player.hitbox.centerx), float(player.hitbox.centery))
             if frame_count % 8 == 0 and len(trace_points) < 900:
                 trace_points.append((int(new_player_center.x), int(new_player_center.y)))
-            moved_step = new_player_center.distance_to(last_player_center)
+            motion_vec = new_player_center - last_player_center
+            moved_step = motion_vec.length()
             distance_moved += moved_step
             if moved_step < 0.30:
                 current_still_frames += 1
             else:
                 current_still_frames = 0
+            if oscillation_cooldown > 0:
+                oscillation_cooldown -= 1
+            if motion_vec.length_squared() > 0.12 and last_motion_vec.length_squared() > 0.12:
+                alignment = float(motion_vec.normalize().dot(last_motion_vec.normalize()))
+                if alignment < -0.72 and moved_step < 3.8 and current_still_frames >= 2 and oscillation_cooldown == 0:
+                    oscillation_events += 1
+                    oscillation_cooldown = 9
+            if motion_vec.length_squared() > 0.12:
+                last_motion_vec = motion_vec
             max_still_frames = max(max_still_frames, current_still_frames)
             last_player_center = new_player_center
 
@@ -1090,14 +1279,6 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
 
             enemies_remaining = len(enemy_group)
             enemies_killed = max(0, total_enemies - enemies_remaining)
-            if enemies_killed > last_kill_count:
-                last_kill_count = enemies_killed
-                _refresh_agent_route_hint(force=True)
-            elif cfg.use_agent and (
-                current_still_frames >= 26
-                or (frame_count % 120 == 0)
-            ):
-                _refresh_agent_route_hint(force=False)
 
             if not intro_active and not objective_complete and total_enemies > 0 and enemies_remaining == 0:
                 objective_complete = True
@@ -1119,20 +1300,26 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
                     player.hitbox.centery = int(player._pos.y)
                     player.rect.center = player.hitbox.center
 
-            if not intro_active and objective_complete and exit_rect is not None and player.hitbox.colliderect(exit_rect):
-                running = False
-                reason = "completed"
-                success = True
-            elif (
-                sandbox_agent_assists
-                and objective_complete
-                and objective_completed_frame is not None
-                and (frame_count - objective_completed_frame) > 170
-            ):
-                # Training fallback: objective completed but pathing to the exact exit tile is still WIP.
-                running = False
-                reason = "completed"
-                success = True
+            if not intro_active and objective_complete:
+                if cfg.use_agent:
+                    # En modo IA (demo/entrenamiento/benchmark), completar objetivo = fin inmediato.
+                    running = False
+                    reason = "completed"
+                    success = True
+                elif exit_rect is not None and player.hitbox.colliderect(exit_rect):
+                    # En modo humano, se mantiene la regla de ir a la salida.
+                    running = False
+                    reason = "completed"
+                    success = True
+                elif (
+                    sandbox_agent_assists
+                    and objective_completed_frame is not None
+                    and (frame_count - objective_completed_frame) > 170
+                ):
+                    # Fallback legacy del sandbox asistido.
+                    running = False
+                    reason = "completed"
+                    success = True
 
         camera.update(player)
 
@@ -1336,6 +1523,7 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
         max_still_frames=int(max_still_frames),
         distance_moved=float(distance_moved),
         hazard_hits=int(getattr(player, "hazard_hits", 0)),
+        oscillation_events=int(oscillation_events),
         trace_points=tuple(trace_points),
         route_hint=tuple(chosen_hint),
     )
@@ -1346,7 +1534,8 @@ def _merge_weights(genome: Genome, menu_cfg: AgentMenuConfig) -> Genome:
     merged.genes["aggression"] = float(merged.genes.get("aggression", 1.0)) * float(menu_cfg.weight_aggression)
     merged.genes["survival"] = float(merged.genes.get("survival", 1.0)) * float(menu_cfg.weight_survival)
     merged.genes["objective"] = float(merged.genes.get("objective", 1.0)) * float(menu_cfg.weight_objective)
-    merged.genes["pathing"] = float(merged.genes.get("pathing", 1.0)) * float(menu_cfg.weight_pathing)
+    base_stalking = float(merged.genes.get("stalking", merged.genes.get("pathing", 1.0)))
+    merged.genes["stalking"] = base_stalking * float(menu_cfg.weight_pathing)
     merged.genes["unstuck"] = float(merged.genes.get("unstuck", 1.0)) * float(menu_cfg.weight_pathing)
     return merged
 
@@ -1355,6 +1544,7 @@ def _fitness_from_result(result: SessionResult) -> float:
     fitness = 0.0
     kill_ratio = float(result.enemies_killed) / max(1.0, float(result.total_enemies))
     sim_seconds = float(result.elapsed_frames) / max(1.0, float(FPS))
+    osc_ratio = float(result.oscillation_events) / max(1.0, float(result.elapsed_frames))
 
     # Prioridad principal: eliminaciones y dano efectivo.
     fitness += float(result.enemies_killed) * 1800.0
@@ -1373,8 +1563,11 @@ def _fitness_from_result(result: SessionResult) -> float:
 
     # Penalizaciones de navegacion / bloqueo.
     fitness -= float(result.max_still_frames) * 8.0
+    fitness -= osc_ratio * 1400.0
     fitness -= float(result.hazard_hits) * 120.0
     fitness -= sim_seconds * 2.5
+    if osc_ratio > 0.22:
+        fitness -= (osc_ratio - 0.22) * 900.0
     if result.reason == "timeout" and result.enemies_killed == 0:
         fitness -= 320.0
     if result.reason == "timeout":
@@ -1500,7 +1693,8 @@ def _draw_training_progress(
     if last_result is not None:
         lines.append(
             f"Ultimo resultado -> kills={last_result.enemies_killed}/{last_result.total_enemies}, "
-            f"dmg={last_result.damage_dealt:.0f}, stuck={last_result.max_still_frames}f, hongos={last_result.hazard_hits}"
+            f"dmg={last_result.damage_dealt:.0f}, stuck={last_result.max_still_frames}f, "
+            f"osc={last_result.oscillation_events}, hongos={last_result.hazard_hits}"
         )
 
     for idx, line in enumerate(lines):
@@ -1595,7 +1789,7 @@ def train_agent(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Agen
                     render=False,
                     max_frames=train_max_frames,
                     agent_genome=effective_genome,
-                    path_hint=generation_hint,
+                    path_hint=None,
                 ),
             )
             genome.fitness = _fitness_from_result(result)
@@ -1607,7 +1801,7 @@ def train_agent(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Agen
                 f"dmg={result.damage_dealt:.0f} | "
                 f"sim_t={result.elapsed_frames / max(1.0, float(FPS)):.2f}s | real_t={result.elapsed_ms / 1000.0:.2f}s | "
                 f"frames={result.elapsed_frames} | "
-                f"stuck={result.max_still_frames}f | hongos={result.hazard_hits} | "
+                f"stuck={result.max_still_frames}f | osc={result.oscillation_events} | hongos={result.hazard_hits} | "
                 f"ok={'SI' if result.success else 'NO'} | motivo={result.reason}"
             )
             if result.success:
@@ -1627,7 +1821,8 @@ def train_agent(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Agen
                 f"{generation + 1}: best={gen_best.fitness:.1f} | "
                 f"kills={best_result.enemies_killed}/{best_result.total_enemies} | "
                 f"dmg={best_result.damage_dealt:.0f} | "
-                f"stuck={best_result.max_still_frames}f | hongos={best_result.hazard_hits} | success={gen_success_rate:.0f}%"
+                f"stuck={best_result.max_still_frames}f | osc={best_result.oscillation_events} | "
+                f"hongos={best_result.hazard_hits} | success={gen_success_rate:.0f}%"
             )
 
         if gen_best.fitness > best_overall.fitness:
@@ -1684,7 +1879,7 @@ def train_agent(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Agen
             render=False,
             max_frames=validation_max_frames,
             agent_genome=runtime_state.best_genome,
-            path_hint=runtime_state.best_path_hint,
+            path_hint=None,
         ),
     )
 
@@ -1694,7 +1889,7 @@ def train_agent(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Agen
         f"{status} | kills={validation.enemies_killed}/{validation.total_enemies} | "
         f"dmg={validation.damage_dealt:.0f} | "
         f"sim_t={validation.elapsed_frames / max(1.0, float(FPS)):.1f}s | real_t={validation.elapsed_ms / 1000.0:.1f}s | "
-        f"stuck_max={validation.max_still_frames}f | hongos={validation.hazard_hits}"
+        f"stuck_max={validation.max_still_frames}f | osc={validation.oscillation_events} | hongos={validation.hazard_hits}"
     )
 
     report_path = _save_training_txt(
@@ -1707,6 +1902,18 @@ def train_agent(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Agen
         history_lines.append(f"TXT guardado: {report_path}")
     else:
         history_lines.append("TXT guardado: error al exportar reporte")
+
+    if validation.success:
+        profile_path = _save_winning_profile(
+            runtime_state=runtime_state,
+            menu_cfg=menu_cfg,
+            level_id=level,
+            source="training_validation",
+        )
+        if profile_path is not None:
+            history_lines.append(f"Perfil ganador guardado: {profile_path}")
+        else:
+            history_lines.append("Perfil ganador guardado: error al exportar preset")
 
     output_lines = [
         f"Nivel: {level}",
@@ -1800,6 +2007,7 @@ def run_benchmark(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Ag
         total_time = 0
         total_damage = 0.0
         total_stuck = 0
+        total_osc = 0
         total_hazards = 0
 
         for run_idx in range(episodes):
@@ -1818,7 +2026,7 @@ def run_benchmark(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Ag
                     render=False,
                     max_frames=14000 if level == "level_1" else 9000,
                     agent_genome=level_genome,
-                    path_hint=level_hint,
+                    path_hint=None,
                 ),
             )
             wins += 1 if result.success else 0
@@ -1827,12 +2035,13 @@ def run_benchmark(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Ag
             total_time += result.elapsed_ms
             total_damage += result.damage_dealt
             total_stuck += result.max_still_frames
+            total_osc += result.oscillation_events
             total_hazards += result.hazard_hits
             detail_lines.append(
                 f"{level} | corrida={run_idx + 1}/{episodes} | paso={'SI' if result.success else 'NO'} | "
                 f"motivo={result.reason} | enemigos={result.enemies_killed}/{result.total_enemies} | "
                 f"dano={result.damage_dealt:.0f} | tiempo={result.elapsed_ms / 1000.0:.2f}s | frames={result.elapsed_frames} | "
-                f"stuck={result.max_still_frames}f | hongos={result.hazard_hits}"
+                f"stuck={result.max_still_frames}f | osc={result.oscillation_events} | hongos={result.hazard_hits}"
             )
 
         success_rate = (wins / episodes) * 100.0
@@ -1840,10 +2049,11 @@ def run_benchmark(screen: pygame.Surface, clock: pygame.time.Clock, menu_cfg: Ag
         avg_time = (total_time / episodes) / 1000.0
         avg_damage = total_damage / episodes
         avg_stuck = total_stuck / episodes
+        avg_osc = total_osc / episodes
         avg_hazards = total_hazards / episodes
         lines.append(
             f"{level}: win={success_rate:.0f}% | avance={avg_kills:.0f}% | dmg={avg_damage:.0f} | "
-            f"tiempo={avg_time:.1f}s | stuck={avg_stuck:.0f}f | hongos={avg_hazards:.1f}"
+            f"tiempo={avg_time:.1f}s | stuck={avg_stuck:.0f}f | osc={avg_osc:.0f} | hongos={avg_hazards:.1f}"
         )
 
     report_path = _save_benchmark_txt(lines, detail_lines, episodes)
@@ -1877,7 +2087,7 @@ def _run_manual_or_agent_session(screen, clock, menu_cfg: AgentMenuConfig, runti
             render=True,
             max_frames=20000,
             agent_genome=genome,
-            path_hint=path_hint,
+            path_hint=None,
             backoffice_overlay=backoffice_overlay,
             population_preview=menu_cfg.population_size,
             generation_preview=menu_cfg.generations,
@@ -1885,6 +2095,22 @@ def _run_manual_or_agent_session(screen, clock, menu_cfg: AgentMenuConfig, runti
             crossover_preview=menu_cfg.crossover_mode,
         ),
     )
+
+    saved_profile_path: str | None = None
+    if use_agent and result.success:
+        winner_genome = genome if genome is not None else runtime_state.best_genome
+        _register_runtime_winner(
+            runtime_state=runtime_state,
+            level_id=level_id,
+            genome=winner_genome,
+            path_hint=tuple(path_hint or ()),
+        )
+        saved_profile_path = _save_winning_profile(
+            runtime_state=runtime_state,
+            menu_cfg=menu_cfg,
+            level_id=level_id,
+            source="agent_demo",
+        )
 
     status = "Mision completada" if result.success else "Sesion finalizada"
     lines = [
@@ -1896,6 +2122,8 @@ def _run_manual_or_agent_session(screen, clock, menu_cfg: AgentMenuConfig, runti
         f"Golpes por hongos: {result.hazard_hits}",
         f"Tiempo: {result.elapsed_ms / 1000.0:.1f}s ({result.elapsed_frames} frames)",
     ]
+    if saved_profile_path is not None:
+        lines.append(f"Preset ganador guardado: {saved_profile_path}")
     _show_info_screen(screen, clock, "Resultado", lines)
 
 
@@ -1917,6 +2145,7 @@ def main() -> str:
         best_genome_by_level={},
         best_path_hint_by_level={},
     )
+    menu_cfg, _ = _load_winning_profile(runtime_state, menu_cfg)
 
     while True:
         menu_result: MenuResult = run_main_menu(screen, clock, menu_cfg)

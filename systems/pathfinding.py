@@ -4,8 +4,19 @@ from heapq import heappop, heappush
 
 import pygame
 
+_WALKABLE_CACHE: dict[tuple[int, int, int, int, int, int], set[tuple[int, int]]] = {}
 
-def _tile_probe_rect(tx: int, ty: int, tile_w: int, tile_h: int, ratio: float = 0.62) -> pygame.Rect:
+
+def _dynamic_signature(dynamic_blockers: list[pygame.Rect]) -> int:
+    if not dynamic_blockers:
+        return 0
+    acc = len(dynamic_blockers) * 1315423911
+    for rect in dynamic_blockers:
+        acc ^= ((int(rect.x) * 73856093) ^ (int(rect.y) * 19349663) ^ (int(rect.w) * 83492791) ^ (int(rect.h) * 2654435761))
+        acc &= 0xFFFFFFFF
+    return int(acc)
+
+def _tile_probe_rect(tx: int, ty: int, tile_w: int, tile_h: int, ratio: float = 0.52) -> pygame.Rect:
     cx = tx * tile_w + (tile_w // 2)
     cy = ty * tile_h + (tile_h // 2)
     side = max(8, int(min(tile_w, tile_h) * ratio))
@@ -27,10 +38,10 @@ def _is_walkable_tile(
     if tx < 0 or ty < 0 or tx >= tiles_x or ty >= tiles_y:
         return False
 
-    probe = _tile_probe_rect(tx, ty, tile_w, tile_h, ratio=0.64)
+    probe = _tile_probe_rect(tx, ty, tile_w, tile_h, ratio=0.52)
     cx, cy = probe.center
 
-    if hasattr(game_map, "is_inside_play_area") and not game_map.is_inside_play_area(float(cx), float(cy), margin=8):
+    if hasattr(game_map, "is_inside_play_area") and not game_map.is_inside_play_area(float(cx), float(cy), margin=0):
         return False
 
     collision_mask = getattr(game_map, "collision_mask", None)
@@ -152,25 +163,32 @@ def build_route_hint(
 
     tiles_x = max(1, map_w // tile_w)
     tiles_y = max(1, map_h // tile_h)
-    sample_side = max(8, int(min(tile_w, tile_h) * 0.64))
-    sample_mask = pygame.mask.Mask((sample_side, sample_side), fill=True)
     dynamic_blockers = list(game_map.get_dynamic_collisions()) if hasattr(game_map, "get_dynamic_collisions") else []
+    dyn_sig = _dynamic_signature(dynamic_blockers)
 
-    walkable: set[tuple[int, int]] = set()
-    for ty in range(tiles_y):
-        for tx in range(tiles_x):
-            if _is_walkable_tile(
-                game_map,
-                tx,
-                ty,
-                tiles_x,
-                tiles_y,
-                tile_w,
-                tile_h,
-                sample_mask,
-                dynamic_blockers,
-            ):
-                walkable.add((tx, ty))
+    cache_key = (id(game_map), map_w, map_h, tile_w, tile_h, dyn_sig)
+    walkable = _WALKABLE_CACHE.get(cache_key)
+    if walkable is None:
+        sample_side = max(6, int(min(tile_w, tile_h) * 0.52))
+        sample_mask = pygame.mask.Mask((sample_side, sample_side), fill=True)
+
+        walkable = set()
+        for ty in range(tiles_y):
+            for tx in range(tiles_x):
+                if _is_walkable_tile(
+                    game_map,
+                    tx,
+                    ty,
+                    tiles_x,
+                    tiles_y,
+                    tile_w,
+                    tile_h,
+                    sample_mask,
+                    dynamic_blockers,
+                ):
+                    walkable.add((tx, ty))
+        _WALKABLE_CACHE[cache_key] = walkable
+
     if not walkable:
         return ()
 

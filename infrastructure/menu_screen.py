@@ -105,7 +105,7 @@ def run_backoffice_menu(screen: pygame.Surface, clock: pygame.time.Clock, config
         ("weight_aggression", "Peso agresion"),
         ("weight_survival", "Peso supervivencia"),
         ("weight_objective", "Peso objetivo"),
-        ("weight_pathing", "Peso pathing"),
+        ("weight_pathing", "Peso stalking"),
         ("benchmark_runs", "Corridas benchmark"),
         ("train_agent", "Entrenar agente"),
         ("run_benchmark", "Correr benchmark"),

@@ -271,7 +271,7 @@ class Player(pygame.sprite.Sprite):
                 self._frame_index = 0
                 self._anim_timer = 0
                 self.energy -= self.ranged_mana_cost
-                self._ranged_attack(game_map)
+                self._ranged_attack(game_map, enemies=enemies)
                 action_locked = True
         
         # Movimiento base si no estamos atacando/bloqueados
@@ -448,7 +448,7 @@ class Player(pygame.sprite.Sprite):
                     continue
             enemy.take_damage(PLAYER_ATTACK_DMGM)
 
-    def fire_ranged_at(self, target_world_x: float, target_world_y: float, game_map=None) -> bool:
+    def fire_ranged_at(self, target_world_x: float, target_world_y: float, game_map=None, enemies=None) -> bool:
         if not self.alive:
             return False
         if self.state in ("attack", "shoot", "hit", "defend"):
@@ -473,10 +473,35 @@ class Player(pygame.sprite.Sprite):
         self._frame_index = 0
         self._anim_timer = 0
         self.energy -= self.ranged_mana_cost
-        self._ranged_attack(game_map, direction_vec=aim.normalize())
+        self._ranged_attack(game_map, direction_vec=aim.normalize(), enemies=enemies)
         return True
 
-    def _ranged_attack(self, game_map=None, direction_vec: pygame.math.Vector2 | None = None):
+    def _apply_point_blank_ranged_damage(self, direction_vec: pygame.math.Vector2, enemies) -> bool:
+        if not enemies:
+            return False
+
+        origin = pygame.math.Vector2(float(self.hitbox.centerx), float(self.hitbox.centery))
+        close_rect = self.hitbox.inflate(14, 14)
+        close_radius = float(max(12, int(min(self.hitbox.width, self.hitbox.height) * 0.95)))
+        forward = direction_vec.normalize() if direction_vec.length_squared() > 1e-6 else pygame.math.Vector2(0.0, 1.0)
+        hit_any = False
+
+        for enemy in enemies:
+            enemy_hitbox = getattr(enemy, "hitbox", enemy.rect)
+            enemy_center = pygame.math.Vector2(float(enemy_hitbox.centerx), float(enemy_hitbox.centery))
+            to_enemy = enemy_center - origin
+            dist = float(to_enemy.length())
+            if dist > (close_radius * 1.8):
+                continue
+            if not enemy_hitbox.colliderect(close_rect):
+                continue
+            if dist > 1e-6 and to_enemy.normalize().dot(forward) < -0.15:
+                continue
+            enemy.take_damage(PLAYER_ATTACK_DMGR)
+            hit_any = True
+        return hit_any
+
+    def _ranged_attack(self, game_map=None, direction_vec: pygame.math.Vector2 | None = None, enemies=None):
         self._ranged_cd = 30
 
         if direction_vec is None:
@@ -490,6 +515,9 @@ class Player(pygame.sprite.Sprite):
             direction_vec = pygame.math.Vector2(0.0, 1.0)
         else:
             direction_vec = direction_vec.normalize()
+
+        # A quemarropa, el rayo aplica dano desde la hitbox del heroe.
+        self._apply_point_blank_ranged_damage(direction_vec, enemies)
 
         dynamic_collision_getter = game_map.get_dynamic_collisions if game_map else None
         map_bounds = (

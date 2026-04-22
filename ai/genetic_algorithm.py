@@ -10,7 +10,7 @@ GENE_ORDER = (
     "objective",
     "spacing",
     "aim",
-    "pathing",
+    "stalking",
     "unstuck",
 )
 
@@ -48,7 +48,7 @@ def _base_genes() -> dict[str, float]:
         "objective": 1.2,
         "spacing": 0.8,
         "aim": 1.0,
-        "pathing": 1.0,
+        "stalking": 1.0,
         "unstuck": 1.0,
     }
 

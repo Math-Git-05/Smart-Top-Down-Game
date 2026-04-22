@@ -3,6 +3,7 @@ import os
 import random
 
 import pygame
+from systems.pathfinding import build_route_hint
 
 from config.settings import (
     ASSETS_DIR,
@@ -259,6 +260,10 @@ class BaseEnemy(pygame.sprite.Sprite):
         self._decision_timer = 0
         self._idle_wander_target: pygame.Vector2 | None = None
         self.debug_path_points: list[tuple[float, float]] = []
+        self._reactive_path: list[pygame.Vector2] = []
+        self._reactive_path_target: pygame.Vector2 | None = None
+        self._path_recalc_cd = 0
+        self._path_probe_failures = 0
         self.last_sensors = {
             "dist_norm": 1.0,
             "hp_norm": 1.0,
@@ -364,6 +369,65 @@ class BaseEnemy(pygame.sprite.Sprite):
     def _move_away(self, tx: float, ty: float, game_map) -> bool:
         return self._move_vector(pygame.Vector2(self._pos.x - float(tx), self._pos.y - float(ty)), game_map)
 
+    def _probe_rect_blocked(self, probe_rect: pygame.Rect, game_map) -> bool:
+        if game_map is None:
+            return False
+
+        map_w = int(getattr(game_map, "map_width", 0) or 0)
+        map_h = int(getattr(game_map, "map_height", 0) or 0)
+        if map_w > 0 and map_h > 0:
+            if probe_rect.left < 0 or probe_rect.top < 0 or probe_rect.right > map_w or probe_rect.bottom > map_h:
+                return True
+
+        collision_mask = getattr(game_map, "collision_mask", None)
+        if collision_mask is not None:
+            if collision_mask.overlap(self._hitbox_mask, (probe_rect.x, probe_rect.y)) is not None:
+                return True
+        else:
+            for blocked in getattr(game_map, "collision_rects", []):
+                if probe_rect.colliderect(blocked):
+                    return True
+
+        if hasattr(game_map, "get_dynamic_collisions"):
+            for blocked in game_map.get_dynamic_collisions() or []:
+                if probe_rect.colliderect(blocked):
+                    return True
+
+        if hasattr(game_map, "is_inside_play_area"):
+            cx, cy = probe_rect.center
+            if not game_map.is_inside_play_area(float(cx), float(cy), margin=0):
+                return True
+
+        return False
+
+    def _has_direct_path(self, target: pygame.Vector2, game_map) -> bool:
+        if game_map is None:
+            return True
+
+        to_target = target - self._pos
+        distance = float(to_target.length())
+        if distance <= max(14.0, self.speed * 2.0):
+            return True
+
+        steps = max(
+            4,
+            min(
+                24,
+                int(
+                    distance
+                    / max(10.0, float(min(self.hitbox.width, self.hitbox.height)) * 0.55)
+                ),
+            ),
+        )
+        probe = pygame.Rect(0, 0, self.hitbox.width, self.hitbox.height)
+        for i in range(1, steps + 1):
+            t = float(i) / float(steps)
+            p = self._pos.lerp(target, t)
+            probe.center = (int(round(p.x)), int(round(p.y)))
+            if self._probe_rect_blocked(probe, game_map):
+                return False
+        return True
+
     def _try_melee(self, player) -> bool:
         if self._melee_cd > 0:
             return False
@@ -377,6 +441,12 @@ class BaseEnemy(pygame.sprite.Sprite):
         if self._ranged_cd > 0:
             return False
         vec = pygame.Vector2(float(player.hitbox.centerx) - self._pos.x, float(player.hitbox.centery) - self._pos.y)
+        dist = float(vec.length())
+        point_blank = max(10.0, float(min(self.hitbox.width, self.hitbox.height)) * 0.70)
+        if dist <= point_blank:
+            self._ranged_cd = 50
+            player.take_damage(self.ranged_damage)
+            return True
         direction = _safe_normalize(vec)
         if direction.length_squared() <= 1e-9:
             return False
@@ -418,6 +488,113 @@ class BaseEnemy(pygame.sprite.Sprite):
         if consumed == "vida":
             self.heal(35)
         return moved
+
+    def _clear_reactive_path(self):
+        self._reactive_path.clear()
+        self._reactive_path_target = None
+        self._path_recalc_cd = 0
+        self._path_probe_failures = 0
+
+    def _rebuild_reactive_path(self, target: pygame.Vector2, game_map, force: bool = False):
+        if game_map is None:
+            self._clear_reactive_path()
+            return False
+
+        if (not force) and self._path_recalc_cd > 0:
+            return False
+
+        route = build_route_hint(
+            game_map=game_map,
+            start_world=(int(self._pos.x), int(self._pos.y)),
+            goal_world_points=[(int(target.x), int(target.y))],
+            max_points=96,
+        )
+        self._reactive_path = [pygame.Vector2(float(x), float(y)) for x, y in route]
+        self._reactive_path_target = pygame.Vector2(target)
+        self._path_recalc_cd = 30
+        return True
+
+    def _move_toward_reactive(self, tx: float, ty: float, game_map) -> bool:
+        target = pygame.Vector2(float(tx), float(ty))
+        if self._path_recalc_cd > 0:
+            self._path_recalc_cd -= 1
+
+        direct_path_clear = self._has_direct_path(target, game_map)
+        if direct_path_clear:
+            # Intento directo primero (barato) cuando hay linea libre.
+            before_dist = self._pos.distance_to(target)
+            direct_moved = self._move_toward(target.x, target.y, game_map)
+            after_dist = self._pos.distance_to(target)
+            progressed = after_dist <= (before_dist - 0.35)
+            if direct_moved and progressed:
+                self._path_probe_failures = 0
+                self.debug_path_points = [(float(target.x), float(target.y))]
+                return True
+            self._path_probe_failures += 1
+            if self._path_probe_failures < 2:
+                self.debug_path_points = [(float(target.x), float(target.y))]
+                return False
+        else:
+            # Si hay obstaculo frontal, saltamos antes al modo reactivo.
+            self._path_probe_failures += 2
+
+        needs_rebuild = False
+        if self._reactive_path_target is None:
+            needs_rebuild = True
+        elif self._reactive_path_target.distance_to(target) >= 24.0:
+            needs_rebuild = True
+        elif not self._reactive_path:
+            needs_rebuild = True
+
+        if needs_rebuild:
+            self._rebuild_reactive_path(target, game_map, force=(not direct_path_clear))
+
+        while self._reactive_path and self._pos.distance_to(self._reactive_path[0]) <= 10.0:
+            self._reactive_path.pop(0)
+
+        if self._reactive_path:
+            waypoint = self._reactive_path[0]
+            self.debug_path_points = [
+                (float(p.x), float(p.y))
+                for p in self._reactive_path[:8]
+            ]
+        else:
+            waypoint = target
+            self.debug_path_points = [(float(target.x), float(target.y))]
+
+        before_waypoint_dist = self._pos.distance_to(waypoint)
+        before_target_dist = self._pos.distance_to(target)
+        moved = self._move_toward(waypoint.x, waypoint.y, game_map)
+        after_waypoint_dist = self._pos.distance_to(waypoint)
+        after_target_dist = self._pos.distance_to(target)
+        progressed = (after_waypoint_dist <= (before_waypoint_dist - 0.25)) or (
+            after_target_dist <= (before_target_dist - 0.25)
+        )
+        if moved and progressed:
+            self._path_probe_failures = 0
+            return True
+
+        if self._path_recalc_cd <= 0 or not self._reactive_path:
+            self._rebuild_reactive_path(target, game_map, force=True)
+
+        # Detour lateral corto para no empujar paredes al perseguir.
+        if not direct_path_clear:
+            to_target = _safe_normalize(target - self._pos)
+            if to_target.length_squared() > 1e-9:
+                lateral = pygame.Vector2(-to_target.y, to_target.x)
+                for side in (1.0, -1.0):
+                    candidate = _safe_normalize((lateral * side * 0.75) + (to_target * 0.25))
+                    if candidate.length_squared() <= 1e-9:
+                        continue
+                    before = self._pos.distance_to(target)
+                    self._move_vector(candidate, game_map)
+                    after = self._pos.distance_to(target)
+                    if after <= (before - 0.20):
+                        self._path_probe_failures = 0
+                        return True
+            return False
+
+        return self._move_toward(target.x, target.y, game_map)
 
     def _update_sensors(self, player, item_manager):
         player_dist = self._pos.distance_to(pygame.Vector2(float(player.hitbox.centerx), float(player.hitbox.centery)))
@@ -491,9 +668,9 @@ class EnemyTypeA(BaseEnemy):
             return True
         if dist <= self.vision_range:
             self.state = "CHASE" if dist > ENEMY_MELEE_RANGE else "ATTACK"
-            self.debug_path_points = [(float(player.hitbox.centerx), float(player.hitbox.centery))]
             self._try_melee(player)
-            return self._move_toward(player.hitbox.centerx, player.hitbox.centery, game_map)
+            return self._move_toward_reactive(player.hitbox.centerx, player.hitbox.centery, game_map)
+        self._clear_reactive_path()
         return self._idle_wander(game_map)
 
 
@@ -515,15 +692,21 @@ class EnemyTypeB(BaseEnemy):
 
     def _update_behavior(self, player, game_map, item_manager, enemy_projectile_group) -> bool:
         dist = self._pos.distance_to(pygame.Vector2(float(player.hitbox.centerx), float(player.hitbox.centery)))
-        self.debug_path_points = [(float(player.hitbox.centerx), float(player.hitbox.centery))]
         if dist <= self.vision_range:
             if dist <= ENEMY_CLOSE_RANGE:
                 self.state = "DEFEND"
                 self.defending = True
+                # A muy corta distancia, su disparo tambien debe pegar (sin proyectil).
+                self._try_ranged(player, game_map, enemy_projectile_group)
+                self._clear_reactive_path()
                 return False
             self.state = "RANGED"
             self._try_ranged(player, game_map, enemy_projectile_group)
+            if dist > (ENEMY_CLOSE_RANGE * 1.25):
+                return self._move_toward_reactive(player.hitbox.centerx, player.hitbox.centery, game_map)
+            self.debug_path_points = [(float(player.hitbox.centerx), float(player.hitbox.centery))]
             return False
+        self._clear_reactive_path()
         return False
 
 
@@ -550,17 +733,19 @@ class EnemyTypeC(BaseEnemy):
             return True
 
         if dist <= self.vision_range:
-            self.debug_path_points = [(float(player_center.x), float(player_center.y))]
             if dist <= ENEMY_MELEE_RANGE:
                 self.state = "COUNTER"
                 self._try_melee(player)
+                self._clear_reactive_path()
                 return self._move_away(player_center.x, player_center.y, game_map)
             if dist <= ENEMY_C_FLEE_RANGE:
                 self.state = "FLEE"
+                self._clear_reactive_path()
                 return self._move_away(player_center.x, player_center.y, game_map)
             self.state = "RANGED"
             self._try_ranged(player, game_map, enemy_projectile_group)
-            return False
+            return self._move_toward_reactive(player_center.x, player_center.y, game_map)
+        self._clear_reactive_path()
         return self._idle_wander(game_map)
 
 
