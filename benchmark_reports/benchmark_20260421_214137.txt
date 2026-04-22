@@ -1,0 +1,16 @@
+Atraco Tactico - Benchmark IA
+Fecha: 2026-04-21T21:41:37
+Corridas por nivel: 4
+
+Resumen:
+- level_1: win=0% | avance=65% | dmg=272 | tiempo=3.0s | stuck=450f | osc=0 | hongos=0.0
+- level_2: pendiente (sin mapa definitivo)
+- level_3: pendiente (sin mapa definitivo)
+
+Detalle por corrida:
+- level_1 | corrida=1/4 | paso=NO | motivo=timeout | enemigos=3/5 | dano=260 | tiempo=5.17s | frames=14000 | stuck=826f | osc=0 | hongos=0
+- level_1 | corrida=2/4 | paso=NO | motivo=timeout | enemigos=3/5 | dano=260 | tiempo=2.29s | frames=14000 | stuck=879f | osc=0 | hongos=0
+- level_1 | corrida=3/4 | paso=NO | motivo=timeout | enemigos=4/5 | dano=310 | tiempo=2.31s | frames=14000 | stuck=54f | osc=0 | hongos=0
+- level_1 | corrida=4/4 | paso=NO | motivo=timeout | enemigos=3/5 | dano=260 | tiempo=2.39s | frames=14000 | stuck=40f | osc=0 | hongos=0
+- level_2: sin ejecucion (nivel pendiente)
+- level_3: sin ejecucion (nivel pendiente)

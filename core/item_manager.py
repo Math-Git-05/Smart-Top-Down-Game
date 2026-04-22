@@ -462,6 +462,14 @@ class ItemManager:
         elif potion_type == "poder":
             player.energy = min(player.max_energy, player.energy + 30)
 
+    @staticmethod
+    def _potion_lifetime_ms(potion_type: str) -> int:
+        if potion_type == "vida":
+            return 13000
+        if potion_type == "escudo":
+            return 9000
+        return 8000
+
     def get_active_potion_positions(self, potion_types: tuple[str, ...] = ("vida",)) -> list[tuple[str, pygame.Vector2]]:
         targets: list[tuple[str, pygame.Vector2]] = []
         for potion_type, pickup in self.active_potions.items():
@@ -514,7 +522,7 @@ class ItemManager:
                 image=self.potion_images[potion_type],
                 pos=spawn_pos,
                 spawned_ms=now_ms,
-                lifetime_ms=7000,
+                lifetime_ms=self._potion_lifetime_ms(potion_type),
                 phase=self.rng.random() * math.tau,
                 state="spawning",
                 state_ms=now_ms,

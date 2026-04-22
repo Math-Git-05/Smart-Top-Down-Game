@@ -980,7 +980,7 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
     paused = False
     pause_started_ms = 0
     paused_total_ms = 0
-    pause_button_rect = pygame.Rect(SCREEN_WIDTH - 116, 10, 104, 30)
+    pause_button_rect = pygame.Rect(SCREEN_WIDTH - 128, 44, 116, 32)
     pause_resume_rect = pygame.Rect((SCREEN_WIDTH // 2) - 132, (SCREEN_HEIGHT // 2) - 12, 264, 44)
     pause_exit_rect = pygame.Rect((SCREEN_WIDTH // 2) - 132, (SCREEN_HEIGHT // 2) + 44, 264, 44)
 
@@ -1367,19 +1367,63 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
             renderer.present()
             renderer.draw_hud(player)
 
-            objective_font = pygame.font.SysFont("consolas", 20, bold=True)
+            objective_font = pygame.font.SysFont("consolas", 19, bold=True)
+            chip_font = pygame.font.SysFont("consolas", 18, bold=True)
             progress_text = f"Enemigos eliminados: {enemies_killed}/{total_enemies}"
             progress_color = (255, 230, 120) if objective_complete else (235, 235, 235)
             progress_surface = objective_font.render(progress_text, True, progress_color)
-            screen.blit(progress_surface, (SCREEN_WIDTH - progress_surface.get_width() - 14, 12))
+
+            progress_chip_w = progress_surface.get_width() + 22
+            progress_chip_h = 30
+            progress_chip_x = max(12, pause_button_rect.left - progress_chip_w - 12)
+            progress_chip_y = 10
+            progress_chip = pygame.Surface((progress_chip_w, progress_chip_h), pygame.SRCALPHA)
+            pygame.draw.rect(progress_chip, (8, 20, 30, 210), progress_chip.get_rect(), border_radius=9)
+            pygame.draw.rect(progress_chip, (108, 142, 170, 235), progress_chip.get_rect(), width=2, border_radius=9)
+            screen.blit(progress_chip, (progress_chip_x, progress_chip_y))
+            screen.blit(
+                progress_surface,
+                (
+                    progress_chip_x + (progress_chip_w // 2) - (progress_surface.get_width() // 2),
+                    progress_chip_y + (progress_chip_h // 2) - (progress_surface.get_height() // 2),
+                ),
+            )
 
             if objective_complete and now_ms < unlocked_message_until_ms:
-                unlock_surface = objective_font.render("Salida desbloqueada", True, (255, 230, 120))
-                screen.blit(unlock_surface, unlock_surface.get_rect(center=(SCREEN_WIDTH // 2, 38)))
+                unlock_surface = chip_font.render("Salida desbloqueada", True, (255, 230, 120))
+                unlock_w = unlock_surface.get_width() + 20
+                unlock_h = 28
+                unlock_x = max(12, progress_chip_x + progress_chip_w - unlock_w)
+                unlock_y = progress_chip_y + progress_chip_h + 6
+                unlock_chip = pygame.Surface((unlock_w, unlock_h), pygame.SRCALPHA)
+                pygame.draw.rect(unlock_chip, (46, 40, 12, 208), unlock_chip.get_rect(), border_radius=8)
+                pygame.draw.rect(unlock_chip, (186, 158, 72, 238), unlock_chip.get_rect(), width=2, border_radius=8)
+                screen.blit(unlock_chip, (unlock_x, unlock_y))
+                screen.blit(
+                    unlock_surface,
+                    (
+                        unlock_x + (unlock_w // 2) - (unlock_surface.get_width() // 2),
+                        unlock_y + (unlock_h // 2) - (unlock_surface.get_height() // 2),
+                    ),
+                )
 
             mode_text = "Manual" if not cfg.use_agent else "Agente"
-            mode_surface = objective_font.render(f"Modo: {mode_text}", True, (214, 228, 236))
-            screen.blit(mode_surface, (12, 12))
+            mode_surface = chip_font.render(f"Modo: {mode_text}", True, (214, 228, 236))
+            mode_chip_w = mode_surface.get_width() + 18
+            mode_chip_h = 28
+            mode_chip_x = 12
+            mode_chip_y = 74
+            mode_chip = pygame.Surface((mode_chip_w, mode_chip_h), pygame.SRCALPHA)
+            pygame.draw.rect(mode_chip, (10, 20, 28, 195), mode_chip.get_rect(), border_radius=8)
+            pygame.draw.rect(mode_chip, (92, 126, 152, 220), mode_chip.get_rect(), width=2, border_radius=8)
+            screen.blit(mode_chip, (mode_chip_x, mode_chip_y))
+            screen.blit(
+                mode_surface,
+                (
+                    mode_chip_x + (mode_chip_w // 2) - (mode_surface.get_width() // 2),
+                    mode_chip_y + (mode_chip_h // 2) - (mode_surface.get_height() // 2),
+                ),
+            )
 
             pause_fill = (98, 120, 136) if paused else (70, 92, 106)
             pygame.draw.rect(screen, pause_fill, pause_button_rect, border_radius=7)

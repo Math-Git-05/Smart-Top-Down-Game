@@ -105,14 +105,33 @@ class AutoPlayerAgent:
                 nearest_dist = dist
         return nearest, nearest_dist
 
-    def _seek_potion(self, player_center: pygame.Vector2, item_manager) -> tuple[float, float, float] | None:
+    def _seek_potion(
+        self,
+        player_center: pygame.Vector2,
+        item_manager,
+        prefer_life: bool = False,
+    ) -> tuple[float, float, float] | None:
         if item_manager is None:
             return None
-        targets = item_manager.get_active_potion_positions(("vida", "escudo"))
+        targets: list[tuple[str, pygame.Vector2]] = []
+        if prefer_life:
+            targets = item_manager.get_active_potion_positions(("vida",))
+            if not targets:
+                targets = item_manager.get_active_potion_positions(("escudo",))
+        else:
+            targets = item_manager.get_active_potion_positions(("vida", "escudo"))
         if not targets:
             return None
 
-        target = min(targets, key=lambda item: player_center.distance_to(item[1]))[1]
+        def _score(item: tuple[str, pygame.Vector2]) -> float:
+            potion_type, pos = item
+            dist = float(player_center.distance_to(pos))
+            # Desempate ligero a favor de vida cuando hay distancia similar.
+            if potion_type == "vida":
+                dist -= 24.0
+            return dist
+
+        target = min(targets, key=_score)[1]
         vec = target - player_center
         distance = float(vec.length())
         if vec.length_squared() <= 1e-6:
@@ -479,12 +498,14 @@ class AutoPlayerAgent:
             self._stalking_timer = 0
             return decision
 
-        if hp_ratio < (0.56 + (0.08 * max(0.0, survival))):
-            potion_move = self._seek_potion(player_center, item_manager)
+        heal_seek_threshold = min(0.82, 0.62 + (0.08 * max(0.0, survival)))
+        prefer_life = hp_ratio <= 0.74
+        if hp_ratio < heal_seek_threshold:
+            potion_move = self._seek_potion(player_center, item_manager, prefer_life=prefer_life)
             if potion_move is not None:
                 mx, my, potion_distance = potion_move
                 potion_dir = pygame.Vector2(float(mx), float(my))
-                if hp_ratio < 0.52 or potion_distance <= 220.0:
+                if hp_ratio < 0.60 or potion_distance <= 280.0:
                     desired_potion = self._inject_hazard_avoidance(
                         potion_dir * min(1.0, 0.64 + (stalking * 0.18)),
                         hazard_dir,
@@ -500,9 +521,9 @@ class AutoPlayerAgent:
                     )
                     decision.move_x = float(move.x)
                     decision.move_y = float(move.y)
-                if hp_ratio < 0.35:
+                if hp_ratio < 0.42:
                     decision.defend = True
-                if hp_ratio < 0.52 or potion_distance <= 220.0:
+                if hp_ratio < 0.60 or potion_distance <= 280.0:
                     self._update_oscillation(pygame.Vector2(decision.move_x, decision.move_y))
                     self._last_target_distance = None
                     return decision

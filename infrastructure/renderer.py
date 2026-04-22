@@ -116,9 +116,16 @@ class Renderer:
 
     def draw_hud(self, player):
         """Barra de vida, escudo y energia del jugador (esquina superior izquierda)."""
-        self._draw_bar(10, 10, player.health, player.max_health, (220, 50, 50), self.icon_health)
-        self._draw_bar(10, 30, player.shield, player.max_shield, (50, 150, 220), self.icon_shield)
-        self._draw_bar(10, 50, player.energy, player.max_energy, (220, 180, 50), self.icon_energy)
+        panel_w = 224
+        panel_h = 66
+        panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+        pygame.draw.rect(panel, (9, 20, 28, 202), panel.get_rect(), border_radius=9)
+        pygame.draw.rect(panel, (100, 132, 154, 228), panel.get_rect(), width=2, border_radius=9)
+        self.real_screen.blit(panel, (8, 8))
+
+        self._draw_bar(16, 14, player.health, player.max_health, (220, 50, 50), self.icon_health)
+        self._draw_bar(16, 34, player.shield, player.max_shield, (50, 150, 220), self.icon_shield)
+        self._draw_bar(16, 54, player.energy, player.max_energy, (220, 180, 50), self.icon_energy)
 
     def _draw_bar(self, x, y, value, max_value, color, icon):
         BAR_W, BAR_H = 140, 14

@@ -283,3 +283,61 @@ Mathias (Math-Git-05)
 ---
 
 **Última actualización**: Abril 2026
+
+## Implementacion real de algoritmos (RL + Genetico)
+
+Esta seccion documenta la implementacion actual del proyecto, alineada a la guia del profesor (sensores, actuadores, fitness, cruce/mutacion/seleccion, pathfinding y validacion por benchmark).
+En el marco del PDF del profesor, el entrenamiento reforzado se modela de forma implicita a traves de recompensa (fitness) + optimizacion genetica.
+
+### 1) Agente tipo RL (politica de decision)
+- Archivo principal: `ai/rl_agent.py`
+- Clase: `AutoPlayerAgent`
+- Sensores usados por la politica:
+  - Distancia y direccion al enemigo mas cercano
+  - Salud (`hp_ratio`) y energia (`energy_ratio`)
+  - Riesgo de hongos (`hazard_rects`) con evasion activa
+  - Estado de bloqueo/stuck y oscilacion de movimiento
+  - Disponibilidad de pociones (`ItemManager.get_active_potion_positions`)
+- Actuadores (salidas):
+  - Movimiento en X/Y
+  - Ataque melee
+  - Defensa
+  - Ataque ranged (target point)
+
+### 2) Optimizador genetico (entrenamiento)
+- Motor genetico: `ai/genetic_algorithm.py`
+  - `create_population()`
+  - `evolve_population()`
+  - `Genome` y `GeneticConfig`
+- Integracion de entrenamiento y evaluacion: `main.py`
+  - `train_agent()`
+  - `_fitness_from_result()`
+  - `run_benchmark()`
+- Operadores ya implementados:
+  - Seleccion: `tournament`, `roulette`, `rank`
+  - Cruce: `uniform`, `single_point`, `blend`
+  - Mutacion por gen con `mutation_rate` + `mutation_scale`
+
+### 3) Fitness (recompensa de entrenamiento)
+- Definido en `main.py` dentro de `_fitness_from_result(result)`.
+- Prioriza kills y dano, luego supervivencia/progreso.
+- Penaliza stuck, oscilacion, timeout, hongos y falta de progreso.
+
+### 4) Pathfinding y navegacion
+- A* en `systems/pathfinding.py` (`build_route_hint`, `astar_tiles`).
+- Enemigos con persecucion reactiva y rodeo de obstaculos:
+  - `core/enemy.py` -> `_move_toward_reactive()`
+- Agente con anti-stuck y detour lateral:
+  - `ai/rl_agent.py` -> `_pick_stalking_detour()`, `_pick_navigable_move()`
+
+### 5) FSM de enemigos (tipos A/B/C)
+- Implementada en `core/enemy.py` mediante estados/roles por tipo:
+  - Tipo A: persecucion + melee + busqueda de vida en low HP
+  - Tipo B: ataque a distancia + defensa a corta distancia
+  - Tipo C: ranged + flee/counter + busqueda de vida en low HP
+
+### 6) Benchmark y reportes
+- Entrenamiento: `training_reports/training_*.txt`
+- Benchmark: `benchmark_reports/benchmark_*.txt`
+- Perfil ganador persistente para demos:
+  - `training_reports/winning_agent_profile.json`
