@@ -410,6 +410,19 @@ def _menu_cfg_from_payload(payload, fallback: AgentMenuConfig) -> AgentMenuConfi
     if not isinstance(payload, dict):
         return cfg
 
+    def _read_bool(value, default_value):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "t", "yes", "y", "si", "on"}:
+                return True
+            if normalized in {"0", "false", "f", "no", "n", "off"}:
+                return False
+        return default_value
+
     try:
         cfg.sandbox_enemy_count = max(1, min(50, int(payload.get("sandbox_enemy_count", cfg.sandbox_enemy_count))))
     except Exception:
@@ -421,7 +434,10 @@ def _menu_cfg_from_payload(payload, fallback: AgentMenuConfig) -> AgentMenuConfi
     except Exception:
         pass
     try:
-        cfg.ally_agents_enabled = bool(payload.get("ally_agents_enabled", cfg.ally_agents_enabled))
+        cfg.ally_agents_enabled = _read_bool(
+            payload.get("ally_agents_enabled", cfg.ally_agents_enabled),
+            cfg.ally_agents_enabled,
+        )
     except Exception:
         pass
     try:

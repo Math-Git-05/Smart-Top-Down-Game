@@ -380,6 +380,8 @@ def run_main_menu(
             "IA y Config",
             [
                 ("scenario_select", "Escenario por Nivel", "Selecciona el enfrentamiento i-x"),
+                ("ally_toggle_main", "Aliados de apoyo", "Activa o desactiva aliados en escenarios mixtos"),
+                ("ally_count_main", "Cantidad aliados", "Define cuantos aliados de apoyo aparecen (0-8)"),
                 ("open_backoffice", "Backoffice IA", "Entrenamiento, cruces, seleccion y benchmark"),
                 ("quit", "Salir", "Cerrar juego"),
             ],
@@ -416,6 +418,10 @@ def run_main_menu(
                         cfg.sandbox_enemy_count = max(1, cfg.sandbox_enemy_count - 1)
                     elif current_action == "scenario_select":
                         cfg.enemy_scenario = _cycle_value(ENEMY_SCENARIO_KEYS, cfg.enemy_scenario, -1)
+                    elif current_action == "ally_toggle_main":
+                        cfg.ally_agents_enabled = not bool(cfg.ally_agents_enabled)
+                    elif current_action == "ally_count_main":
+                        cfg.ally_agents_count = max(0, min(8, int(cfg.ally_agents_count) - 1))
                     elif current_action == "play_agent_selected":
                         cfg.training_level = _cycle_value(["level_1", "level_2", "level_3", "sandbox"], cfg.training_level, -1)
                 if event.key in (pygame.K_RIGHT, pygame.K_d):
@@ -424,6 +430,10 @@ def run_main_menu(
                         cfg.sandbox_enemy_count = min(50, cfg.sandbox_enemy_count + 1)
                     elif current_action == "scenario_select":
                         cfg.enemy_scenario = _cycle_value(ENEMY_SCENARIO_KEYS, cfg.enemy_scenario, +1)
+                    elif current_action == "ally_toggle_main":
+                        cfg.ally_agents_enabled = not bool(cfg.ally_agents_enabled)
+                    elif current_action == "ally_count_main":
+                        cfg.ally_agents_count = max(0, min(8, int(cfg.ally_agents_count) + 1))
                     elif current_action == "play_agent_selected":
                         cfg.training_level = _cycle_value(["level_1", "level_2", "level_3", "sandbox"], cfg.training_level, +1)
                 if event.key in (pygame.K_RETURN, pygame.K_SPACE):
@@ -436,6 +446,12 @@ def run_main_menu(
                         continue
                     if action == "scenario_select":
                         cfg.enemy_scenario = _cycle_value(ENEMY_SCENARIO_KEYS, cfg.enemy_scenario, +1)
+                        continue
+                    if action == "ally_toggle_main":
+                        cfg.ally_agents_enabled = not bool(cfg.ally_agents_enabled)
+                        continue
+                    if action == "ally_count_main":
+                        cfg.ally_agents_count = max(0, min(8, int(cfg.ally_agents_count)))
                         continue
                     return MenuResult(action, cfg.copy())
                 selected_by_page[page_idx] = selected
@@ -479,6 +495,12 @@ def run_main_menu(
             elif action == "scenario_select":
                 value = _render_label(option_font, enemy_scenario_label(cfg.enemy_scenario, short=True), (255, 214, 118))
                 screen.blit(value, (row_rect.right - value.get_width() - 10, row_rect.y + 6))
+            elif action == "ally_toggle_main":
+                value = _render_label(option_font, "SI" if cfg.ally_agents_enabled else "NO", (255, 214, 118))
+                screen.blit(value, (row_rect.right - value.get_width() - 10, row_rect.y + 6))
+            elif action == "ally_count_main":
+                value = _render_label(option_font, str(max(0, int(cfg.ally_agents_count))), (255, 214, 118))
+                screen.blit(value, (row_rect.right - value.get_width() - 10, row_rect.y + 6))
             elif action == "play_agent_selected":
                 map_name = {
                     "level_1": "Nivel 1",
@@ -493,6 +515,13 @@ def run_main_menu(
                 desc_text = description
                 if action == "scenario_select":
                     desc_text = enemy_scenario_label(cfg.enemy_scenario, short=False)
+                elif action == "ally_toggle_main":
+                    desc_text = "Solo aplica en mixed_vs_many_agents / human_vs_many_agents"
+                elif action == "ally_count_main":
+                    if not cfg.ally_agents_enabled:
+                        desc_text = "Aliados desactivados (activalos para que aparezcan)"
+                    else:
+                        desc_text = "Cantidad de aliados visibles y de apoyo"
                 elif action == "play_agent_selected":
                     desc_text = "Ajusta nivel con IZQ/DER y ejecuta con ENTER"
                 desc = _render_label(small_font, desc_text, (196, 222, 188))
