@@ -1357,7 +1357,7 @@ def run_game_session(screen: pygame.Surface, clock: pygame.time.Clock, cfg: Sess
     scenario_forced_cycle: tuple[type, ...] | None = scenario_plan.forced_cycle
     scenario_runtime_adjustable = bool(scenario_plan.runtime_adjustable)
     scenario_allies_enabled = cfg.enemy_scenario in {"mixed_vs_many_agents", "human_vs_many_agents"}
-    if scenario_allies_enabled and bool(getattr(cfg, "ally_agents_enabled", True)):
+    if scenario_allies_enabled and bool(getattr(cfg, "ally_agents_enabled", False)):
         ally_agent_count = max(1, 1 + int(max(0, getattr(cfg, "ally_agents_count", 2))))
     else:
         ally_agent_count = 1

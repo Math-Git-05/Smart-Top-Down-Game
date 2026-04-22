@@ -34,7 +34,7 @@ def enemy_scenario_label(code: str, short: bool = False) -> str:
 class AgentMenuConfig:
     sandbox_enemy_count: int = 3
     enemy_scenario: str = "mixed_vs_1_agent"
-    ally_agents_enabled: bool = True
+    ally_agents_enabled: bool = False
     ally_agents_count: int = 2  # cantidad de aliados visuales/de apoyo (excluye al heroe)
     training_level: str = "sandbox"  # level_1 | level_2 | level_3 | sandbox
     benchmark_runs: int = 4
